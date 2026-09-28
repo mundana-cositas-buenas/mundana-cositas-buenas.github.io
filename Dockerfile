@@ -45,7 +45,7 @@ RUN chmod -v 0755 /usr/local/bin/user-login.sh
 RUN install -v -m 0750 -o ${DEVEL_USER} -g ${DEVEL_USER} -d /opt/mundana
 RUN install -v -m 0750 -o ${DEVEL_USER} -g ${DEVEL_USER} -d /opt/mundana/site
 
-RUN ln -vsf /home/${DEVEL_USER}/.local/npm/node_modules/.bin/claude /usr/local/bin/claude
+RUN ln -vsf /home/${DEVEL_USER}/.local/bin/claude /usr/local/bin/claude
 
 USER ${DEVEL_USER}:${DEVEL_USER}
 WORKDIR /home/${DEVEL_USER}
@@ -56,11 +56,9 @@ ENV HOME=/home/${DEVEL_USER}
 RUN npm version
 RUN npx --version
 
-ENV MUNDANA_CLAUDE_UPGRADE=2.1.257
+ENV MUNDANA_CLAUDE_UPGRADE=2.1.284
 
-RUN install -v -d -m 0750 ${HOME}/.local/npm \
-	&& cd ${HOME}/.local/npm \
-	&& npm install @anthropic-ai/claude-code
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 RUN /usr/local/bin/claude --version
 
