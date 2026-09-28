@@ -417,3 +417,23 @@ button.peligro-fuerte {
 .aviso-backup {
   margin: 0 0 1rem;
 }
+
+/* PWA */
+.version {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.sin-conexion {
+  margin-right: 1rem;
+}
+
+.sin-conexion::before {
+  content: '●';
+  margin-right: 0.3rem;
+  color: var(--muted);
+}

@@ -158,17 +158,18 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - Notas: formato `{ formato: 'mundana-backup', version, exportadoEn, datos: { insumos, recetas, recetaLineas, productos, movimientos } }`; `meta` (fecha del último backup) no se exporta. `version` es la versión del formato del backup (no la del esquema de IndexedDB): subirla si cambia la forma de los registros y enseñarle a `leerBackup` a convertir los archivos viejos. La validación revisa campos de cada registro, ids repetidos y referencias (líneas → receta/insumo, movimientos → producto); la importación reemplaza todo en una sola transacción. El aviso de 7 días solo aparece si hay datos. CSV con `;`, coma decimal y BOM (Excel en español). Lógica testeada en Node; la descarga real y la selección de archivo quedan **sin probar en navegador**.
 
 ### Fase 4: PWA y uso sin conexión (requisito del núcleo)
-- [ ] `manifest.webmanifest`: `name`, `short_name`, `start_url` y `scope` relativos al `base` de Pages, `display: standalone`, colores e íconos (192, 512, maskable).
-- [ ] Service worker que **precachea todo el build** (HTML, JS, CSS, íconos). Generar la lista de archivos en el build (plugin mínimo de Vite propio, ~30 líneas).
-- [ ] Versionado del cache: nombre con hash o versión del build, y limpieza de caches viejos en `activate`.
-- [ ] **Actualizaciones**: detectar un service worker nuevo y mostrar un aviso "Hay una versión nueva, recargar". Nunca recargar solo si hay un formulario a medio llenar.
-- [ ] Ninguna dependencia de red en tiempo de ejecución: sin CDN, sin fuentes remotas, sin analítica. Fuentes del sistema.
-- [ ] Indicador discreto de estado de conexión (opcional, informativo).
-- [ ] Tests automáticos en Node: lógica del SW (estrategias, limpieza de caches, lista de precache), validez del manifest y revisión del `dist/` (sin URLs externas, precache completo).
+- [x] `manifest.webmanifest`: `name`, `short_name`, `start_url` y `scope` relativos al `base` de Pages, `display: standalone`, colores e íconos (192, 512, maskable).
+- [x] Service worker que **precachea todo el build** (HTML, JS, CSS, íconos). Generar la lista de archivos en el build (plugin mínimo de Vite propio, ~30 líneas).
+- [x] Versionado del cache: nombre con hash o versión del build, y limpieza de caches viejos en `activate`.
+- [x] **Actualizaciones**: detectar un service worker nuevo y mostrar un aviso "Hay una versión nueva, recargar". Nunca recargar solo si hay un formulario a medio llenar.
+- [x] Ninguna dependencia de red en tiempo de ejecución: sin CDN, sin fuentes remotas, sin analítica. Fuentes del sistema.
+- [x] Indicador discreto de estado de conexión (opcional, informativo).
+- [x] Tests automáticos en Node: lógica del SW (estrategias, limpieza de caches, lista de precache), validez del manifest y revisión del `dist/` (sin URLs externas, precache completo).
 - [ ] **[Manual, usuario]** Cargar la app una vez, cortar la red (DevTools → Offline o desconectar), cerrar y reabrir, y comprobar que todo funciona, incluidos backup e importación.
 - [ ] **[Manual, usuario]** Probar la instalación en **Chrome sobre Windows** (Instalar app, ventana propia, arranque sin red).
 - [ ] **[Manual, usuario]** Probar el uso sin conexión en **Firefox** como pestaña normal (sin instalación).
-- [ ] Pedir `navigator.storage.persist()` también al instalar.
+- [x] Pedir `navigator.storage.persist()` también al instalar.
+- Notas: lógica pura en `src/pwa/logic.ts`; `src/pwa/sw.ts` es el envoltorio y el plugin `mundana-precache` de `vite.config.ts` lo compila a `/sw.js` (autocontenido: el build falla si comparte un chunk con la app), le inyecta la lista de archivos (build + `public/`) y un hash FNV del contenido como versión del cache (`mundana-<hash>`). Cache-first para todo lo precacheado; cualquier navegación dentro del scope recibe `index.html`; el precache se baja con `cache: 'reload'` para no mezclar un `index.html` viejo del cache HTTP. El SW nuevo espera (sin `skipWaiting`) hasta que el usuario toca "Recargar" en el aviso; si hay campos escritos sin guardar (`src/pwa/ediciones.ts`) se pide confirmación. La app busca actualizaciones cada hora y al volver a la pestaña. Manifest, `start_url` y `scope` relativos (`./`), así que sirven también bajo un sub-path. Íconos generados con `node scripts/iconos.mjs` (sin herramientas de imagen). Sin SW en `npm run dev`. Tests de manifest y de `dist/` en `test/` (este último hace un build real a un directorio temporal). El SW real, la instalación y el aviso de actualización quedan **sin probar en navegador**.
 
 ### Fase 5: pulido
 - [ ] Atajos de teclado y foco correcto en formularios.
@@ -194,5 +195,4 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 2. Confirmar Svelte o TS vanilla (por defecto: Svelte).
    - Recordar: **no hay navegador disponible**. Todo se testea en Node (ver "Estrategia de testing") y lo demás queda como verificación manual del usuario.
 3. Navegador objetivo: **Windows + Chrome** (principal), Firefox posible. Ya confirmado.
-4. Fases 0 a 3 hechas. Seguir con la Fase 4 (PWA): manifest, íconos, plugin de Vite para la lista de precache y service worker con su lógica en funciones puras testeadas.
-5. La PWA (Fase 4) se puede adelantar a después de la Fase 0 si se quiere probar el modo offline desde el principio.
+4. Fases 0 a 4 hechas (la Fase 4 espera las verificaciones manuales del usuario). Seguir con la Fase 5 (pulido).

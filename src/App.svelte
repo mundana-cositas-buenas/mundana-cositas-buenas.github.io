@@ -4,11 +4,47 @@
   import { backupVencido, cambiosBackup, contar, diasDesde, ultimoBackup } from './lib/backup';
   import type { DB } from './lib/db';
   import { SECCIONES, seccionDesdeHash, subruta } from './lib/nav';
-  import type { PersistState } from './lib/storage';
+  import { requestPersistence, type PersistState } from './lib/storage';
+  import type { Ediciones } from './pwa/ediciones';
+  import { aplicarVersion, aviso, avisosVersion, type AvisoVersion } from './pwa/registro';
   import { cambiosStock, cargarAlertas } from './stock/repo';
   import StockView from './stock/StockView.svelte';
 
-  let { persistencia, db }: { persistencia: Promise<PersistState>; db: Promise<DB> } = $props();
+  let {
+    persistencia: pedida,
+    db,
+    ediciones,
+  }: { persistencia: Promise<PersistState>; db: Promise<DB>; ediciones: Ediciones } = $props();
+
+  // Asked again once installed: Chrome tends to grant persistence to installed apps.
+  // svelte-ignore state_referenced_locally
+  let persistencia = $state(pedida);
+  $effect(() => {
+    const alInstalar = () => (persistencia = requestPersistence());
+    window.addEventListener('appinstalled', alInstalar);
+    return () => window.removeEventListener('appinstalled', alInstalar);
+  });
+
+  let enLinea = $state(navigator.onLine);
+
+  // New service worker waiting (or activated from another tab). Reloading is always the user's call.
+  let version = $state<AvisoVersion | undefined>(aviso);
+  $effect(() => {
+    const nueva = () => (version = 'nueva');
+    const activada = () => (version = 'activada');
+    avisosVersion.addEventListener('nueva', nueva);
+    avisosVersion.addEventListener('activada', activada);
+    return () => {
+      avisosVersion.removeEventListener('nueva', nueva);
+      avisosVersion.removeEventListener('activada', activada);
+    };
+  });
+
+  function recargar() {
+    if (ediciones.pendientes() && !confirm('Hay datos escritos sin guardar. Si recargás ahora se pierden. ¿Recargar igual?'))
+      return;
+    aplicarVersion();
+  }
 
   let hash = $state(location.hash);
   const seccion = $derived(seccionDesdeHash(hash));
@@ -39,7 +75,11 @@
   });
 </script>
 
-<svelte:window onhashchange={() => (hash = location.hash)} />
+<svelte:window
+  onhashchange={() => (hash = location.hash)}
+  ononline={() => (enLinea = true)}
+  onoffline={() => (enLinea = false)}
+/>
 
 <header>
   <strong class="marca">Mundana</strong>
@@ -51,6 +91,14 @@
     {/each}
   </nav>
 </header>
+
+{#if version}
+  <div class="version" role="status">
+    {version === 'nueva' ? 'Hay una versión nueva de la app.' : 'Se activó una versión nueva de la app.'}
+    <button onclick={recargar}>Recargar</button>
+    <button class="secundario" onclick={() => (version = undefined)}>Más tarde</button>
+  </div>
+{/if}
 
 <main>
   {#await db}
@@ -75,6 +123,9 @@
 </main>
 
 <footer>
+  {#if !enLinea}
+    <span class="sin-conexion" title="La app funciona igual: los datos están en este navegador.">Sin conexión</span>
+  {/if}
   {#await persistencia then p}
     {#if p !== 'persistente'}
       <span class="aviso">El navegador puede borrar los datos si falta espacio. Hacé backups seguido.</span>
