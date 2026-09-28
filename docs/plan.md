@@ -127,7 +127,7 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - [x] Crear proyecto Vite + Svelte + TS, con Vitest y `fake-indexeddb` configurados desde el inicio.
 - [x] Layout con navegación entre "Costos" y "Stock" (y "Backup").
 - [x] Wrapper de IndexedDB (`db.ts`) con versionado de esquema.
-- [ ] Workflow de GitHub Actions y primer despliegue de prueba en Pages. (Workflow escrito en `.github/workflows/deploy.yml`; falta configurar Pages → Source: GitHub Actions y hacer el primer push.)
+- [x] Workflow de GitHub Actions y primer despliegue de prueba en Pages (`.github/workflows/deploy.yml`, Pages → Source: GitHub Actions).
 - [x] `navigator.storage.persist()` al iniciar.
 
 ### Fase 1: módulo costos
@@ -165,9 +165,9 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - [x] Ninguna dependencia de red en tiempo de ejecución: sin CDN, sin fuentes remotas, sin analítica. Fuentes del sistema.
 - [x] Indicador discreto de estado de conexión (opcional, informativo).
 - [x] Tests automáticos en Node: lógica del SW (estrategias, limpieza de caches, lista de precache), validez del manifest y revisión del `dist/` (sin URLs externas, precache completo).
-- [ ] **[Manual, usuario]** Cargar la app una vez, cortar la red (DevTools → Offline o desconectar), cerrar y reabrir, y comprobar que todo funciona, incluidos backup e importación.
-- [ ] **[Manual, usuario]** Probar la instalación en **Chrome sobre Windows** (Instalar app, ventana propia, arranque sin red).
-- [ ] **[Manual, usuario]** Probar el uso sin conexión en **Firefox** como pestaña normal (sin instalación).
+- [x] **[Manual, usuario]** Cargar la app una vez, cortar la red (DevTools → Offline o desconectar), cerrar y reabrir, y comprobar que todo funciona, incluidos backup e importación.
+- [x] **[Manual, usuario]** Probar la instalación en **Chrome sobre Windows** (Instalar app, ventana propia, arranque sin red).
+- [x] **[Manual, usuario]** Probar el uso sin conexión en **Firefox** como pestaña normal (sin instalación).
 - [x] Pedir `navigator.storage.persist()` también al instalar.
 - Notas: lógica pura en `src/pwa/logic.ts`; `src/pwa/sw.ts` es el envoltorio y el plugin `mundana-precache` de `vite.config.ts` lo compila a `/sw.js` (autocontenido: el build falla si comparte un chunk con la app), le inyecta la lista de archivos (build + `public/`) y un hash FNV del contenido como versión del cache (`mundana-<hash>`). Cache-first para todo lo precacheado; cualquier navegación dentro del scope recibe `index.html`; el precache se baja con `cache: 'reload'` para no mezclar un `index.html` viejo del cache HTTP. El SW nuevo espera (sin `skipWaiting`) hasta que el usuario toca "Recargar" en el aviso; si hay campos escritos sin guardar (`src/pwa/ediciones.ts`) se pide confirmación. La app busca actualizaciones cada hora y al volver a la pestaña. Manifest, `start_url` y `scope` relativos (`./`), así que sirven también bajo un sub-path. Íconos generados con `node scripts/iconos.mjs` (sin herramientas de imagen). Sin SW en `npm run dev`. Tests de manifest y de `dist/` en `test/` (este último hace un build real a un directorio temporal). El SW real, la instalación y el aviso de actualización quedan **sin probar en navegador**.
 
@@ -176,7 +176,7 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - [x] Validaciones y mensajes de error claros (unidades incompatibles, campos vacíos, números negativos).
 - [x] Impresión de la lista de precios sugeridos (CSS `@media print`).
 - [x] Historial de precios de insumos (opcional).
-- [ ] **[Manual, usuario]** Probar atajos y foco, los mensajes de error, la impresión y el historial en Chrome (ver notas).
+- [x] **[Manual, usuario]** Probar atajos y foco, los mensajes de error, la impresión y el historial en Chrome (ver notas).
 - Notas:
   - **Atajos** (`src/lib/atajos.ts`, lógica pura testeada): teclas sueltas que solo funcionan fuera de los campos de texto y sin Ctrl/Alt: `r` Recetas, `i` Insumos, `p` Productos, `m` Movimientos, `a` Alertas, `b` Backup, `n` "nuevo" (primer campo para cargar), `/` buscar, `?` ayuda (también con el botón "Atajos" del pie; Esc la cierra). Las páginas marcan sus destinos con `data-atajo="nuevo"` / `data-atajo="buscar"`.
   - **Foco**: al guardar o cancelar la edición de una fila (insumos, productos), el foco vuelve a su botón "Editar"; si falta algo, va al primer campo inválido. Al crear o duplicar una receta se abre con el nombre seleccionado (ruta `#/costos/receta/<id>/nueva`, que se limpia sola). En Movimientos el foco arranca en el producto. En una receta, agregar insumo es ahora un campo con autocompletado (como el de productos en Movimientos) en vez de un `<select>` que agregaba la línea con solo mover la flecha; Enter en una línea la da por terminada y vuelve a ese campo.
@@ -203,4 +203,4 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 2. Confirmar Svelte o TS vanilla (por defecto: Svelte).
    - Recordar: **no hay navegador disponible**. Todo se testea en Node (ver "Estrategia de testing") y lo demás queda como verificación manual del usuario.
 3. Navegador objetivo: **Windows + Chrome** (principal), Firefox posible. Ya confirmado.
-4. Fases 0 a 5 hechas (las Fases 4 y 5 esperan las verificaciones manuales del usuario). Queda pendiente el primer despliegue en Pages (Fase 0) y lo que surja de las pruebas manuales.
+4. Fases 0 a 5 hechas, desplegadas en Pages y verificadas por el usuario en el navegador. El plan está completo: lo que siga son mejoras o arreglos nuevos.

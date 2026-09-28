@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Mundana is an offline-first PWA for a food shop, with two independent modules: **recipe costing** (costos) and **stock**. Phases 0–5 (skeleton, costos, stock, backup, PWA, polish) are implemented; the manual browser checks of Phases 4–5 and the first Pages deploy are pending with the user. `docs/plan.md` (in Spanish) is the source of truth for scope, stack, data model, formulas and phased checklist — read it before starting work, and tick its checkboxes as phases are completed.
+Mundana is an offline-first PWA for a food shop, with two independent modules: **recipe costing** (costos) and **stock**. All phases (0–5: skeleton, costos, stock, backup, PWA, polish) are implemented, deployed to Pages and checked by the user in the browser; new work is fixes or additions beyond the plan. `docs/plan.md` (in Spanish) is the source of truth for scope, stack, data model, formulas and phased checklist — read it before starting work, and tick its checkboxes as phases are completed.
 
 ## Keeping this file current
 
