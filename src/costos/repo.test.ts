@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { newId, openDB, type DB } from '../lib/db';
 import {
   borrarInsumo,
@@ -9,6 +9,7 @@ import {
   guardarInsumo,
   guardarLinea,
   guardarReceta,
+  historialDe,
   InsumoEnUso,
   lineasPorReceta,
   listarInsumos,
@@ -30,6 +31,7 @@ async function fresh(): Promise<DB> {
 
 afterEach(() => {
   open.splice(0).forEach((db) => db.close());
+  vi.useRealTimers();
 });
 
 const insumo = (nombre: string): Insumo => ({
@@ -86,6 +88,30 @@ describe('insumos', () => {
     await borrarLinea(db, l.id);
     await borrarInsumo(db, harina.id);
     expect(await listarInsumos(db)).toEqual([]);
+    expect(await historialDe(db, harina.id)).toEqual([]);
+  });
+
+  it('records the price history only when the cost changes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const db = await fresh();
+    const cuando = (dia: number) => vi.setSystemTime(new Date(2026, 0, dia));
+
+    cuando(1);
+    let harina = await guardarInsumo(db, insumo('harina')); // $1000/kg
+    cuando(2);
+    harina = await guardarInsumo(db, { ...harina, nombre: 'Harina 000' }); // rename: no entry
+    cuando(3);
+    harina = await guardarInsumo(db, { ...harina, precioCompra: 600000, cantidadCompra: 5 }); // $1200/kg
+    cuando(4);
+    harina = await guardarInsumo(db, { ...harina, precioCompra: 120000, cantidadCompra: 1 }); // same cost
+    cuando(5);
+    await guardarInsumo(db, { ...harina, cantidadCompra: 0 }); // can't be costed: no entry
+
+    const h = await historialDe(db, harina.id);
+    expect(h.map((e) => [new Date(e.fecha).getDate(), e.costoPorUnidadBase])).toEqual([
+      [1, 100],
+      [3, 120],
+    ]);
   });
 });
 

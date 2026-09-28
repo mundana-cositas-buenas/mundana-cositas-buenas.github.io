@@ -1,6 +1,7 @@
 <script lang="ts">
   import BackupView from './backup/BackupView.svelte';
   import CostosView from './costos/CostosView.svelte';
+  import { ATAJOS, atajoDe } from './lib/atajos';
   import { backupVencido, cambiosBackup, contar, diasDesde, ultimoBackup } from './lib/backup';
   import type { DB } from './lib/db';
   import { SECCIONES, seccionDesdeHash, subruta } from './lib/nav';
@@ -46,6 +47,26 @@
     aplicarVersion();
   }
 
+  let ayuda = $state(false);
+
+  function teclas(ev: KeyboardEvent) {
+    if (ev.defaultPrevented || ev.repeat) return;
+    if (ev.key === 'Escape' && ayuda) {
+      ayuda = false;
+      return;
+    }
+    const a = atajoDe(ev, ev.target instanceof HTMLElement ? ev.target : null);
+    if (!a) return;
+    ev.preventDefault();
+    if (a.tipo === 'ayuda') ayuda = !ayuda;
+    else if (a.tipo === 'ir') location.hash = a.hash;
+    else {
+      const el = document.querySelector<HTMLElement>(`[data-atajo="${a.objetivo}"]`);
+      el?.focus();
+      if (el instanceof HTMLInputElement) el.select();
+    }
+  }
+
   let hash = $state(location.hash);
   const seccion = $derived(seccionDesdeHash(hash));
   const ruta = $derived(subruta(hash));
@@ -76,6 +97,7 @@
 </script>
 
 <svelte:window
+  onkeydown={teclas}
   onhashchange={() => (hash = location.hash)}
   ononline={() => (enLinea = true)}
   onoffline={() => (enLinea = false)}
@@ -122,7 +144,26 @@
   {/await}
 </main>
 
+{#if ayuda}
+  <aside class="atajos" aria-label="Atajos de teclado">
+    <h2>Atajos de teclado</h2>
+    <p class="muted">Funcionan cuando no estás escribiendo en un campo.</p>
+    <table class="tabla compacta">
+      <tbody>
+        {#each ATAJOS as a (a.tecla)}
+          <tr><td><kbd>{a.tecla}</kbd></td><td>{a.descripcion}</td></tr>
+        {/each}
+        <tr><td><kbd>Enter</kbd></td><td>Guardar la fila o el movimiento que estás escribiendo</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Cancelar la edición de una fila / cerrar esta ayuda</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Pasar al campo siguiente</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="secundario" onclick={() => (ayuda = false)}>Cerrar</button>
+  </aside>
+{/if}
+
 <footer>
+  <button type="button" class="enlace" onclick={() => (ayuda = !ayuda)} title="Atajos de teclado">Atajos (?)</button>
   {#if !enLinea}
     <span class="sin-conexion" title="La app funciona igual: los datos están en este navegador.">Sin conexión</span>
   {/if}

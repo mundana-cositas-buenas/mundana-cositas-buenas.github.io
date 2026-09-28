@@ -79,6 +79,10 @@ h1 {
 }
 
 footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
   padding: 0.5rem 1rem;
   font-size: 0.85rem;
   color: var(--muted);
@@ -261,8 +265,10 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-.tabla td.agregar {
+.tabla td.agregar,
+.tabla td.agregar form {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
   border-bottom: none;
   padding-top: 0.5rem;
@@ -428,12 +434,129 @@ button.peligro-fuerte {
   border-bottom: 1px solid var(--line);
 }
 
-.sin-conexion {
-  margin-right: 1rem;
-}
 
 .sin-conexion::before {
   content: '●';
   margin-right: 0.3rem;
   color: var(--muted);
+}
+
+/* Price history, under an ingredient's row */
+.tabla tr.historial,
+.tabla tr.historial:hover {
+  background: #f6f3ea;
+}
+
+.tabla tr.historial > td {
+  padding: 0.5rem 1rem 0.75rem;
+}
+
+.tabla td.sube {
+  color: var(--error);
+}
+
+/* Keyboard shortcuts */
+button.enlace {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+button.enlace:hover {
+  color: var(--fg);
+}
+
+.atajos {
+  position: fixed;
+  right: 1rem;
+  bottom: 2.75rem;
+  z-index: 10;
+  max-width: calc(100vw - 2rem);
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+
+.atajos h2 {
+  margin-top: 0;
+}
+
+.atajos .tabla.compacta {
+  min-width: 0;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 0.3em;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.empuje {
+  flex: 1;
+}
+
+/* Printing (e.g. the suggested price list) */
+.solo-imprimir {
+  display: none;
+}
+
+@page {
+  margin: 1.5cm;
+}
+
+@media print {
+  header,
+  footer,
+  .version,
+  .aviso-backup,
+  .atajos,
+  .titulo,
+  .barra,
+  .tabla .acciones,
+  .tabla.sin-costos .costo {
+    display: none !important;
+  }
+
+  .solo-imprimir {
+    display: block;
+  }
+
+  :root,
+  body {
+    font-size: 11pt;
+    background: #fff;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .tabla thead {
+    display: table-header-group;
+  }
+
+  .tabla tr {
+    break-inside: avoid;
+  }
+
+  .tabla tbody tr:hover {
+    background: none;
+  }
 }

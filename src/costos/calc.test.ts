@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { costoLineaInsumo, costoPorUnidadBase, costoReceta, porId } from './calc';
-import type { Insumo, LineaCostoFijo, LineaInsumo } from './types';
+import { cambioDeCosto, costoLineaInsumo, costoPorUnidadBase, costoReceta, entradaHistorial, porId, variaciones } from './calc';
+import type { Insumo, LineaCostoFijo, LineaInsumo, PrecioHistorico } from './types';
 
 const insumo = (id: string, o: Partial<Insumo> = {}): Insumo => ({
   id,
@@ -113,5 +113,48 @@ describe('costoReceta', () => {
     const caro = porId([insumo('harina', { precioCompra: 200000 })]);
     expect(costoReceta({ rendimiento: 1, margen: 0 }, lineas, insumos).costoTotal).toBe(10000);
     expect(costoReceta({ rendimiento: 1, margen: 0 }, lineas, caro).costoTotal).toBe(20000);
+  });
+});
+
+describe('price history', () => {
+  const harina: Insumo = {
+    id: 'h',
+    actualizadoEn: '',
+    nombre: 'Harina',
+    unidadBase: 'g',
+    precioCompra: 100000,
+    cantidadCompra: 1,
+    unidadCompra: 'kg',
+  };
+  const e = (fecha: string, costo: number, unidadBase: PrecioHistorico['unidadBase'] = 'g'): PrecioHistorico => ({
+    id: fecha,
+    actualizadoEn: fecha,
+    insumoId: 'h',
+    fecha,
+    unidadBase,
+    costoPorUnidadBase: costo,
+  });
+
+  it('records the current cost per base unit', () => {
+    expect(entradaHistorial(harina, 'x', '2026-01-01')).toEqual({ ...e('2026-01-01', 100), id: 'x' });
+    expect(entradaHistorial({ ...harina, cantidadCompra: 0 }, 'x', '2026-01-01')).toBeUndefined();
+  });
+
+  it('only counts real cost changes', () => {
+    expect(cambioDeCosto(undefined, e('b', 100))).toBe(true);
+    expect(cambioDeCosto(e('a', 100), e('b', 100))).toBe(false);
+    expect(cambioDeCosto(e('a', 100 / 3), e('b', (100 / 3) * 3 / 3))).toBe(false);
+    expect(cambioDeCosto(e('a', 100), e('b', 120))).toBe(true);
+    expect(cambioDeCosto(e('a', 100), e('b', 100, 'ml'))).toBe(true);
+  });
+
+  it('computes % changes, newest first, only within a unit family', () => {
+    const v = variaciones([e('2026-03-01', 150), e('2026-01-01', 100), e('2026-02-01', 120), e('2026-04-01', 5, 'u')]);
+    expect(v.map((x) => x.entrada.fecha)).toEqual(['2026-04-01', '2026-03-01', '2026-02-01', '2026-01-01']);
+    expect(v[0].pct).toBeUndefined();
+    expect(v[1].pct).toBeCloseTo(25);
+    expect(v[2].pct).toBeCloseTo(20);
+    expect(v[3].pct).toBeUndefined();
+    expect(variaciones([e('a', 0), e('b', 10)])[0].pct).toBeUndefined();
   });
 });

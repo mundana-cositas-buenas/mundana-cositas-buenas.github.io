@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DB, DB_VERSION, idbRequest, newId, openDB, type Registro } from './db';
+import type { Insumo as InsumoCostos, PrecioHistorico } from '../costos/types';
+import { DB, DB_VERSION, idbRequest, MIGRATIONS, newId, openDB, type Registro } from './db';
 
 interface Insumo extends Registro {
   nombre: string;
@@ -24,7 +25,7 @@ describe('openDB', () => {
     const db = await fresh();
     expect(db.version).toBe(DB_VERSION);
     expect([...db.idb.objectStoreNames].sort()).toEqual(
-      ['insumos', 'meta', 'movimientos', 'productos', 'recetaLineas', 'recetas'].sort(),
+      ['historialPrecios', 'insumos', 'meta', 'movimientos', 'productos', 'recetaLineas', 'recetas'].sort(),
     );
     const lineas = db.idb.transaction('recetaLineas').objectStore('recetaLineas');
     expect([...lineas.indexNames].sort()).toEqual(['insumoId', 'recetaId']);
@@ -47,6 +48,22 @@ describe('openDB', () => {
     expect(ran).toEqual([1, 2]);
     expect(db.version).toBe(2);
     expect(db.idb.objectStoreNames.contains('extra')).toBe(true);
+  });
+
+  it('v3 seeds the price history with the current cost of every ingredient', async () => {
+    const name = `historial-${n++}`;
+    const v2 = await openDB(name, MIGRATIONS.slice(0, 2));
+    const base = { unidadBase: 'g', precioCompra: 100000, cantidadCompra: 1, unidadCompra: 'kg' } as const;
+    await v2.put<InsumoCostos>('insumos', { id: 'h', actualizadoEn: '', nombre: 'Harina', ...base });
+    await v2.put<InsumoCostos>('insumos', { id: 'x', actualizadoEn: '', nombre: 'Rota', ...base, cantidadCompra: 0 });
+    v2.close();
+
+    const db = await openDB(name);
+    open.push(db);
+    const h = await db.list<PrecioHistorico>('historialPrecios');
+    expect(h).toHaveLength(1); // the one that can't be costed is skipped
+    expect(h[0]).toMatchObject({ insumoId: 'h', unidadBase: 'g', costoPorUnidadBase: 100 });
+    expect(await db.listBy('historialPrecios', 'insumoId', 'h')).toHaveLength(1);
   });
 
   it('lets a migration transform existing data', async () => {

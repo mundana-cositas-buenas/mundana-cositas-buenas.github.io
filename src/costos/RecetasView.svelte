@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
-  import { coincide } from '../lib/texto';
+  import { coincide, formatFechaHora } from '../lib/texto';
   import { costoReceta, porId, type CostoReceta } from './calc';
   import { borrarReceta, duplicarReceta, guardarReceta, lineasPorReceta, listarInsumos, listarRecetas, nuevaReceta } from './repo';
   import type { Receta } from './types';
@@ -12,6 +12,8 @@
   let cargando = $state(true);
   let busqueda = $state('');
   let mensaje = $state('');
+  let conCostos = $state(true);
+  let impreso = $state(new Date().toISOString()); // date on the printed list, refreshed on every print
 
   const visibles = $derived(filas.filter((f) => coincide(f.receta.nombre, busqueda)));
 
@@ -23,7 +25,8 @@
   }
   cargar();
 
-  const abrir = (id: string) => (location.hash = `#/costos/receta/${id}`);
+  // `/nueva`: the detail page starts with the name selected, ready to type.
+  const abrir = (id: string) => (location.hash = `#/costos/receta/${id}/nueva`);
 
   async function crear() {
     abrir((await guardarReceta(db, nuevaReceta())).id);
@@ -44,24 +47,38 @@
   }
 </script>
 
+<svelte:window onbeforeprint={() => (impreso = new Date().toISOString())} />
+
 <div class="barra">
-  <button type="button" onclick={crear}>Nueva receta</button>
-  <input type="search" bind:value={busqueda} placeholder="Buscar receta…" aria-label="Buscar receta" />
+  <button type="button" data-atajo="nuevo" onclick={crear}>Nueva receta</button>
+  <input type="search" data-atajo="buscar" bind:value={busqueda} placeholder="Buscar receta…" aria-label="Buscar receta" />
   <span class="muted">{visibles.length} de {filas.length}</span>
+  <span class="empuje"></span>
+  <label title="Si no, la lista impresa muestra solo rinde y precio sugerido">
+    <input type="checkbox" bind:checked={conCostos} /> Imprimir con costos
+  </label>
+  <button type="button" class="secundario" onclick={() => print()} disabled={!visibles.length} title="Imprime las recetas de la lista (respeta la búsqueda)">
+    Imprimir precios
+  </button>
+</div>
+
+<div class="solo-imprimir">
+  <h1>Lista de precios sugeridos</h1>
+  <p class="muted">{formatFechaHora(impreso)}{busqueda.trim() ? ` · recetas que coinciden con "${busqueda.trim()}"` : ''}</p>
 </div>
 
 {#if mensaje}
   <p class="error" role="alert">{mensaje}</p>
 {/if}
 
-<table class="tabla">
+<table class="tabla" class:sin-costos={!conCostos}>
   <thead>
     <tr>
       <th>Receta</th>
       <th class="num">Rinde</th>
-      <th class="num">Costo total</th>
-      <th class="num">Costo por unidad</th>
-      <th class="num">Margen</th>
+      <th class="num costo">Costo total</th>
+      <th class="num costo">Costo por unidad</th>
+      <th class="num costo">Margen</th>
       <th class="num">Precio sugerido</th>
       <th></th>
     </tr>
@@ -81,9 +98,9 @@
           {/if}
         </td>
         <td class="num">{formatNumero(r.rendimiento)} {r.unidadRendimiento}</td>
-        <td class="num">{formatPesos(c.costoTotal)}</td>
-        <td class="num">{formatPesos(c.costoPorUnidad)}</td>
-        <td class="num">{formatNumero(r.margen)} %</td>
+        <td class="num costo">{formatPesos(c.costoTotal)}</td>
+        <td class="num costo">{formatPesos(c.costoPorUnidad)}</td>
+        <td class="num costo">{formatNumero(r.margen)} %</td>
         <td class="num fuerte">{formatPesos(c.precioSugerido)}</td>
         <td class="acciones">
           <button type="button" class="secundario" onclick={() => duplicar(r)}>Duplicar</button>

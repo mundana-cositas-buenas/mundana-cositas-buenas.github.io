@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { DB } from '../lib/db';
   import { formatNumero } from '../lib/money';
-  import { buscarProducto, efecto } from './logic';
+  import { buscarPorNombre } from '../lib/texto';
+  import { efecto } from './logic';
   import { registrarMovimiento } from './repo';
   import type { Movimiento, Producto, TipoMovimiento } from './types';
   import { TIPOS, validarMovimiento } from './validar';
@@ -30,10 +31,15 @@
   let cantidadInput: HTMLInputElement | undefined = $state();
 
   const activos = $derived(productos.filter((p) => p.activo));
-  const producto = $derived(fijo ?? buscarProducto(activos, productoTexto));
+  const producto = $derived(fijo ?? buscarPorNombre(activos, productoTexto));
   const v = $derived(validarMovimiento({ tipo, cantidad, nota }));
   const actual = $derived(producto ? (stock.get(producto.id) ?? 0) : 0);
   const despues = $derived(v.ok ? actual + efecto(v.datos) : undefined);
+
+  // The movements page exists to register movements: start there.
+  $effect(() => {
+    if (!fijo) productoInput?.focus();
+  });
 
   async function registrar() {
     if (guardando) return;
@@ -91,6 +97,7 @@
     <input
       bind:this={productoInput}
       bind:value={productoTexto}
+      data-atajo="nuevo"
       list="productos-activos"
       placeholder="Producto…"
       aria-label="Producto"
@@ -104,6 +111,7 @@
   {/if}
   <input
     bind:this={cantidadInput}
+    data-atajo={fijo ? 'nuevo' : undefined}
     class="num corto"
     inputmode="decimal"
     bind:value={cantidad}

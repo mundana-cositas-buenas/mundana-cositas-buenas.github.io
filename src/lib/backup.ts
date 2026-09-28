@@ -1,6 +1,6 @@
 // Full JSON backup: export every data store, validate a file, and replace everything with it.
 
-import type { Insumo, Receta, RecetaLinea } from '../costos/types';
+import type { Insumo, PrecioHistorico, Receta, RecetaLinea } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
 import type { Movimiento, Producto } from '../stock/types';
 import { idbRequest as req, type DB, type Registro, type StoreName } from './db';
@@ -8,14 +8,16 @@ import { esUnidad, esUnidadBase } from './units';
 
 export const FORMATO = 'mundana-backup';
 // Bump when the shape of the records changes, and teach leerBackup to upgrade older files.
-export const VERSION = 1;
+// 2: adds historialPrecios (v1 files are read with an empty history).
+export const VERSION = 2;
 
 /** Data stores, in dependency order. `meta` (e.g. the last backup date) is not exported. */
-export const STORES = ['insumos', 'recetas', 'recetaLineas', 'productos', 'movimientos'] as const;
+export const STORES = ['insumos', 'historialPrecios', 'recetas', 'recetaLineas', 'productos', 'movimientos'] as const;
 export type StoreDatos = (typeof STORES)[number];
 
 export const NOMBRES: Record<StoreDatos, string> = {
   insumos: 'Insumos',
+  historialPrecios: 'Historial de precios',
   recetas: 'Recetas',
   recetaLineas: 'Líneas de receta',
   productos: 'Productos',
@@ -24,6 +26,7 @@ export const NOMBRES: Record<StoreDatos, string> = {
 
 export interface Datos {
   insumos: Insumo[];
+  historialPrecios: PrecioHistorico[];
   recetas: Receta[];
   recetaLineas: RecetaLinea[];
   productos: Producto[];
@@ -167,6 +170,8 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
         cantidadCompra: noNegativo,
         unidadCompra: esUnidad,
       };
+    case 'historialPrecios':
+      return { ...REGISTRO, insumoId: noVacio, fecha, unidadBase: esUnidadBase, costoPorUnidadBase: noNegativo };
     case 'recetas':
       return { ...REGISTRO, nombre: texto, rendimiento: noNegativo, unidadRendimiento: texto, margen: numero, notas: texto };
     case 'recetaLineas':
@@ -216,6 +221,7 @@ export function leerBackup(contenido: string): Lectura {
   if (!fecha(json.exportadoEn)) errores.push('Falta la fecha de exportación o es inválida.');
   const datos = json.datos;
   if (!esObjeto(datos)) return { ok: false, errores: [...errores, 'Faltan los datos.'] };
+  if (v === 1 && datos.historialPrecios === undefined) datos.historialPrecios = [];
 
   const ids = {} as Record<StoreDatos, Set<string>>;
   for (const s of STORES) {
@@ -250,6 +256,7 @@ export function leerBackup(contenido: string): Lectura {
       }
     });
   };
+  ref('historialPrecios', 'insumoId', 'insumos');
   ref('recetaLineas', 'recetaId', 'recetas');
   ref('recetaLineas', 'insumoId', 'insumos');
   ref('movimientos', 'productoId', 'productos');
@@ -258,5 +265,5 @@ export function leerBackup(contenido: string): Lectura {
     const extra = errores.length - MAX_ERRORES;
     return { ok: false, errores: extra > 0 ? [...errores.slice(0, MAX_ERRORES), `…y ${extra} errores más.`] : errores };
   }
-  return { ok: true, backup: json as unknown as Backup };
+  return { ok: true, backup: { ...(json as unknown as Backup), version: VERSION } };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertas, buscarProducto, efecto, historial, nivel, stockActual, stockPorProducto } from './logic';
+import { alertas, efecto, historial, nivel, stockActual, stockPorProducto } from './logic';
 import type { Movimiento, Producto, TipoMovimiento } from './types';
 
 let n = 0;
@@ -79,21 +79,5 @@ describe('alertas', () => {
       ['te', 'agotado', 0, 0],
       ['vino', 'bajo', 3, 2],
     ]);
-  });
-});
-
-describe('buscarProducto', () => {
-  const ps = ['Vino tinto', 'Vino blanco', 'Té', 'Té verde'].map((nombre) => ({ nombre }));
-
-  it('prefers an exact name, then a single partial match', () => {
-    expect(buscarProducto(ps, 'te')?.nombre).toBe('Té');
-    expect(buscarProducto(ps, 'tin')?.nombre).toBe('Vino tinto');
-    expect(buscarProducto(ps, 'vino bla')?.nombre).toBe('Vino blanco');
-  });
-
-  it('returns nothing when ambiguous, unknown or empty', () => {
-    expect(buscarProducto(ps, 'vino')).toBeUndefined();
-    expect(buscarProducto(ps, 'miel')).toBeUndefined();
-    expect(buscarProducto(ps, ' ')).toBeUndefined();
   });
 });

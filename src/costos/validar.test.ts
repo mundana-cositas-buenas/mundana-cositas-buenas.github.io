@@ -4,6 +4,7 @@ import {
   cabeceraDesde,
   filaDesde,
   leerFila,
+  mensajeFila,
   validarCabecera,
   validarInsumo,
   type InsumoForm,
@@ -88,5 +89,7 @@ describe('recipe lines', () => {
     const r = leerFila({ ...f, cantidad: 'x', merma: '100' });
     expect(Object.keys(r.errores).sort()).toEqual(['cantidad', 'merma']);
     expect(r.linea.tipo === 'insumo' && r.linea.cantidad).toBeNaN();
+    expect(mensajeFila(r.errores)).toMatch(/^Cantidad: No es un número.* · Merma: Debe ser menor que 100$/);
+    expect(mensajeFila({})).toBe('');
   });
 });

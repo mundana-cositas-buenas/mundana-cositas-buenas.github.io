@@ -1,14 +1,25 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { describirErrores } from '../lib/campos';
   import { newId, type DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
+  import { buscarPorNombre } from '../lib/texto';
   import { baseDe, unidadesDe, type Unidad } from '../lib/units';
   import { costoReceta, porId } from './calc';
   import { borrarLinea, borrarReceta, duplicarReceta, guardarLinea, guardarReceta, listarInsumos, obtenerReceta } from './repo';
   import type { Insumo, Receta, RecetaLinea } from './types';
-  import { cabeceraDesde, filaDesde, leerFila, validarCabecera, type CabeceraForm, type Fila } from './validar';
+  import {
+    cabeceraDesde,
+    ETIQUETAS_CABECERA,
+    filaDesde,
+    leerFila,
+    mensajeFila,
+    validarCabecera,
+    type CabeceraForm,
+    type Fila,
+  } from './validar';
 
-  let { db, id }: { db: DB; id: string } = $props();
+  let { db, id, nueva = false }: { db: DB; id: string; nueva?: boolean } = $props();
 
   let estado = $state<'cargando' | 'ok' | 'no-existe'>('cargando');
   let receta = $state<Receta>();
@@ -17,6 +28,10 @@
   let insumos = $state<Insumo[]>([]);
   let mensaje = $state('');
   let tabla: HTMLTableElement | undefined = $state();
+  let nombreInput: HTMLInputElement | undefined = $state();
+  let agregarInput: HTMLInputElement | undefined = $state();
+  let agregarTexto = $state('');
+  let agregarError = $state('');
 
   const insumosPorId = $derived(porId(insumos));
   const cabValida = $derived(validarCabecera(cab));
@@ -41,6 +56,13 @@
     cab = cabeceraDesde(r.receta);
     filas = r.lineas.map(filaDesde);
     estado = 'ok';
+    if (nueva) {
+      // Just created or duplicated: ready to type the name. Drop `/nueva` so a reload doesn't repeat it.
+      await tick();
+      nombreInput?.focus();
+      nombreInput?.select();
+      history.replaceState(history.state, '', `#/costos/receta/${encodeURIComponent(recetaId)}`);
+    }
   }
 
   $effect(() => {
@@ -91,10 +113,18 @@
     });
   }
 
-  function agregarInsumo(ev: Event & { currentTarget: HTMLSelectElement }) {
-    const ins = insumosPorId.get(ev.currentTarget.value);
-    ev.currentTarget.value = '';
-    if (!ins || !receta) return;
+  function agregarInsumo(ev: SubmitEvent) {
+    ev.preventDefault();
+    if (!receta) return;
+    const ins = buscarPorNombre(insumos, agregarTexto);
+    if (!ins) {
+      agregarError = agregarTexto.trim()
+        ? `No hay un único insumo que coincida con "${agregarTexto.trim()}". Elegilo de la lista o escribí más.`
+        : 'Escribí el nombre del insumo.';
+      agregarInput?.focus();
+      return;
+    }
+    agregarTexto = agregarError = '';
     const base = { id: newId(), actualizadoEn: '', recetaId: receta.id, orden: siguienteOrden() };
     agregar({ ...base, tipo: 'insumo', insumoId: ins.id, cantidad: 0, unidad: ins.unidadBase, mermaPct: 0 }, 'cantidad');
   }
@@ -118,7 +148,7 @@
     if (!receta) return;
     const r = receta;
     guardando(async () => {
-      location.hash = `#/costos/receta/${(await duplicarReceta(db, r.id)).id}`;
+      location.hash = `#/costos/receta/${(await duplicarReceta(db, r.id)).id}/nueva`;
     });
   }
 
@@ -139,6 +169,14 @@
   }
 
   const errorCampo = (i: number, campo: string): string | undefined => leidas[i]?.errores[campo];
+
+  /** Enter in a line: done with it (its change event saves it), on to the next ingredient. */
+  function siguiente(ev: KeyboardEvent) {
+    if (ev.key !== 'Enter' || !(ev.target instanceof HTMLInputElement)) return;
+    ev.preventDefault();
+    ev.target.blur();
+    agregarInput?.focus();
+  }
 </script>
 
 <p><a href="#/costos">← Recetas</a></p>
@@ -156,6 +194,7 @@
     <label class="ancho">
       Nombre
       <input
+        bind:this={nombreInput}
         bind:value={cab.nombre}
         onchange={guardarCabecera}
         aria-invalid={!cabValida.ok && !!cabValida.errores.nombre}
@@ -192,9 +231,7 @@
   </div>
   {#if !cabValida.ok}
     <p class="error">
-      {Object.entries(cabValida.errores)
-        .map(([k, v]) => `${k === 'rendimiento' ? 'Rinde' : k === 'margen' ? 'Margen' : 'Nombre'}: ${v}`)
-        .join(' · ')} (no se guarda hasta corregirlo)
+      {describirErrores(cabValida.errores, ETIQUETAS_CABECERA)} (no se guarda hasta corregirlo)
     </p>
   {/if}
 
@@ -212,7 +249,8 @@
     <tbody>
       {#each filas as f, i (f.linea.id)}
         {@const r = costo.lineas.get(f.linea.id)}
-        <tr data-linea={f.linea.id}>
+        {@const tecleo = mensajeFila(leidas[i]?.errores ?? {})}
+        <tr data-linea={f.linea.id} onkeydown={siguiente}>
           {#if f.tipo === 'insumo'}
             <td>
               <select value={f.linea.insumoId} onchange={(e) => cambiarInsumo(f, e.currentTarget.value)} aria-label="Insumo">
@@ -280,7 +318,9 @@
             </td>
           {/if}
           <td class="num">
-            {#if r?.ok}
+            {#if tecleo}
+              <span class="error" title="La línea no se guarda hasta corregirlo">{tecleo} (sin guardar)</span>
+            {:else if r?.ok}
               {formatPesos(r.valor)}
             {:else}
               <span class="error">{r?.error}</span>
@@ -298,15 +338,34 @@
     <tfoot>
       <tr>
         <td colspan="6" class="agregar">
-          <select onchange={agregarInsumo} aria-label="Agregar insumo" disabled={!insumos.length}>
-            <option value="">{insumos.length ? '+ Agregar insumo…' : 'No hay insumos cargados'}</option>
-            {#each insumos as ins (ins.id)}
-              <option value={ins.id}>{ins.nombre}</option>
-            {/each}
-          </select>
+          <form onsubmit={agregarInsumo} aria-label="Agregar insumo">
+            <input
+              bind:this={agregarInput}
+              bind:value={agregarTexto}
+              oninput={() => (agregarError = '')}
+              data-atajo="nuevo"
+              list="insumos-receta"
+              placeholder={insumos.length ? 'Agregar insumo…' : 'No hay insumos cargados'}
+              aria-label="Agregar insumo"
+              aria-invalid={!!agregarError}
+              disabled={!insumos.length}
+            />
+            <datalist id="insumos-receta">
+              {#each insumos as ins (ins.id)}
+                <option value={ins.nombre}></option>
+              {/each}
+            </datalist>
+            <button type="submit" class="secundario" disabled={!insumos.length}>+ Insumo</button>
+          </form>
           <button type="button" class="secundario" onclick={agregarCostoFijo}>+ Costo fijo</button>
+          {#if !insumos.length}
+            <a href="#/costos/insumos">Cargar insumos</a>
+          {/if}
         </td>
       </tr>
+      {#if agregarError}
+        <tr class="errores"><td colspan="6">{agregarError}</td></tr>
+      {/if}
     </tfoot>
   </table>
 

@@ -2,7 +2,8 @@
 
 import { porNombre } from '../lib/campos';
 import { idbRequest as req, newId, type DB, type Registro } from '../lib/db';
-import type { Insumo, Receta, RecetaLinea } from './types';
+import { cambioDeCosto, entradaHistorial } from './calc';
+import type { Insumo, PrecioHistorico, Receta, RecetaLinea } from './types';
 
 const sello = <T extends Registro>(r: T): T => ({ ...r, actualizadoEn: new Date().toISOString() });
 
@@ -12,8 +13,26 @@ export async function listarInsumos(db: DB): Promise<Insumo[]> {
   return (await db.list<Insumo>('insumos')).sort(porNombre);
 }
 
+const porFecha = (a: PrecioHistorico, b: PrecioHistorico) => a.fecha.localeCompare(b.fecha);
+
+/** Stores an ingredient and, if its cost changed (or it's new), a price history entry, atomically. */
 export function guardarInsumo(db: DB, i: Insumo): Promise<Insumo> {
-  return db.put('insumos', i);
+  const guardado = sello(i);
+  return db.tx(['insumos', 'historialPrecios'], 'readwrite', async (tx) => {
+    const historial = tx.objectStore('historialPrecios');
+    await req(tx.objectStore('insumos').put(guardado));
+    const nueva = entradaHistorial(guardado, newId(), guardado.actualizadoEn);
+    if (nueva) {
+      const previas = await req<PrecioHistorico[]>(historial.index('insumoId').getAll(i.id));
+      if (cambioDeCosto(previas.sort(porFecha).at(-1), nueva)) await req(historial.put(nueva));
+    }
+    return guardado;
+  });
+}
+
+/** An ingredient's price history, oldest first. */
+export async function historialDe(db: DB, insumoId: string): Promise<PrecioHistorico[]> {
+  return (await db.listBy<PrecioHistorico>('historialPrecios', 'insumoId', insumoId)).sort(porFecha);
 }
 
 export class InsumoEnUso extends Error {
@@ -32,9 +51,9 @@ export function recetasQueUsan(db: DB, insumoId: string): Promise<string[]> {
   });
 }
 
-/** Deletes an ingredient; throws InsumoEnUso (and deletes nothing) if a recipe uses it. */
+/** Deletes an ingredient and its price history; throws InsumoEnUso (and deletes nothing) if a recipe uses it. */
 export async function borrarInsumo(db: DB, id: string): Promise<void> {
-  await db.tx(['insumos', 'recetaLineas', 'recetas'], 'readwrite', async (tx) => {
+  await db.tx(['insumos', 'recetaLineas', 'recetas', 'historialPrecios'], 'readwrite', async (tx) => {
     const lineas = await req<RecetaLinea[]>(tx.objectStore('recetaLineas').index('insumoId').getAll(id));
     if (lineas.length) {
       const ids = [...new Set(lineas.map((l) => l.recetaId))];
@@ -42,6 +61,8 @@ export async function borrarInsumo(db: DB, id: string): Promise<void> {
       throw new InsumoEnUso(recetas.map((r) => r?.nombre ?? '(sin nombre)'));
     }
     await req(tx.objectStore('insumos').delete(id));
+    const historial = tx.objectStore('historialPrecios');
+    for (const k of await req(historial.index('insumoId').getAllKeys(id))) await req(historial.delete(k));
   });
 }
 

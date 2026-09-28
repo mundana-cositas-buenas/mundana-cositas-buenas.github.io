@@ -1,8 +1,9 @@
 <script lang="ts">
-  import type { Errores } from '../lib/campos';
+  import { tick } from 'svelte';
+  import { describirErrores, type Errores } from '../lib/campos';
   import { formatNumero } from '../lib/money';
   import type { Producto } from './types';
-  import { productoFormDesde, productoVacio, validarProducto, type DatosProducto, type ProductoForm } from './validar';
+  import { ETIQUETAS_PRODUCTO, productoFormDesde, productoVacio, validarProducto, type DatosProducto, type ProductoForm } from './validar';
 
   let {
     inicial,
@@ -22,9 +23,18 @@
 
   // svelte-ignore state_referenced_locally
   let form = $state<ProductoForm>(inicial ? productoFormDesde(inicial) : productoVacio());
-  let errores = $state<Errores<ProductoForm>>({});
   let guardando = $state(false);
   let nombreInput: HTMLInputElement | undefined = $state();
+  let fila: HTMLTableRowElement | undefined = $state();
+
+  // Errors show after the first save attempt, then follow the typing.
+  let intentado = $state(false);
+  let errorGeneral = $state('');
+  const validado = $derived(validarProducto(form, otrosNombres));
+  const errores: Errores<ProductoForm> = $derived({
+    ...(intentado && !validado.ok ? validado.errores : {}),
+    ...(errorGeneral ? { general: errorGeneral } : {}),
+  });
 
   $effect(() => {
     if (enfocar) nombreInput?.focus();
@@ -32,21 +42,24 @@
 
   async function guardar() {
     if (guardando) return;
-    const v = validarProducto(form, otrosNombres);
+    errorGeneral = '';
+    const v = validado;
     if (!v.ok) {
-      errores = v.errores;
+      intentado = true;
+      await tick();
+      fila?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
       return;
     }
-    errores = {};
     guardando = true;
     try {
       await onguardar(v.datos);
       if (!inicial) {
         form = productoVacio();
+        intentado = false;
         nombreInput?.focus();
       }
     } catch (e) {
-      errores = { general: e instanceof Error ? e.message : String(e) };
+      errorGeneral = e instanceof Error ? e.message : String(e);
     } finally {
       guardando = false;
     }
@@ -63,11 +76,12 @@
   }
 </script>
 
-<tr class="editando" onkeydown={teclas}>
+<tr class="editando" bind:this={fila} onkeydown={teclas}>
   <td>
     <input
       bind:this={nombreInput}
       bind:value={form.nombre}
+      data-atajo={inicial ? undefined : 'nuevo'}
       placeholder={inicial ? '' : 'Nuevo producto…'}
       aria-label="Nombre"
       aria-invalid={!!errores.nombre}
@@ -108,6 +122,6 @@
 </tr>
 {#if Object.keys(errores).length}
   <tr class="errores">
-    <td colspan="7">{Object.values(errores).join(' · ')}</td>
+    <td colspan="7">{describirErrores(errores, ETIQUETAS_PRODUCTO)}</td>
   </tr>
 {/if}

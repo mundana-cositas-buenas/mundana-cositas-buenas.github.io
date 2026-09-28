@@ -12,6 +12,14 @@ export interface ProductoForm {
   activo: boolean;
 }
 
+export const ETIQUETAS_PRODUCTO: Record<keyof ProductoForm, string> = {
+  nombre: 'Nombre',
+  unidad: 'Unidad',
+  stockMinimo: 'Stock mínimo',
+  precioVenta: 'Precio de venta',
+  activo: 'Activo',
+};
+
 export type DatosProducto = Omit<Producto, 'id' | 'actualizadoEn'>;
 
 export const productoVacio = (): ProductoForm => ({ nombre: '', unidad: '', stockMinimo: '', precioVenta: '', activo: true });

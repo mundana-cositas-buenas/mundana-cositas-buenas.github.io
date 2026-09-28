@@ -20,7 +20,7 @@
 {#if vista === 'insumos'}
   <InsumosView {db} />
 {:else if vista === 'receta'}
-  <RecetaDetalle {db} id={ruta[1]} />
+  <RecetaDetalle {db} id={ruta[1]} nueva={ruta[2] === 'nueva'} />
 {:else}
   <RecetasView {db} />
 {/if}

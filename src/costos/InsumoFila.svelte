@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { numeroEditable, type Errores } from '../lib/campos';
+  import { tick } from 'svelte';
+  import { describirErrores, numeroEditable, type Errores } from '../lib/campos';
   import { formatPesos, pesosEditable } from '../lib/money';
   import { baseDe, UNIDADES_BASE, unidadesDe, unidadMayor, type UnidadBase } from '../lib/units';
   import { costoPorUnidadBase } from './calc';
   import type { Insumo } from './types';
-  import { validarInsumo, type InsumoForm } from './validar';
+  import { ETIQUETAS_INSUMO, validarInsumo, type InsumoForm } from './validar';
 
   let {
     inicial,
@@ -35,20 +36,28 @@
 
   // svelte-ignore state_referenced_locally
   let form = $state(desde(inicial));
-  let errores = $state<Errores<InsumoForm>>({});
   let guardando = $state(false);
   let nombreInput: HTMLInputElement | undefined = $state();
+  let fila: HTMLTableRowElement | undefined = $state();
+
+  // Errors show after the first save attempt, then follow the typing.
+  let intentado = $state(false);
+  let errorGeneral = $state('');
+  const validado = $derived(validarInsumo(form, otrosNombres));
+  const errores: Errores<InsumoForm> = $derived({
+    ...(intentado && !validado.ok ? validado.errores : {}),
+    ...(errorGeneral ? { general: errorGeneral } : {}),
+  });
 
   $effect(() => {
     if (enfocar) nombreInput?.focus();
   });
 
   const vista = $derived.by(() => {
-    const v = validarInsumo(form, otrosNombres);
-    if (!v.ok) return '';
-    const c = costoPorUnidadBase(v.datos);
+    if (!validado.ok) return '';
+    const c = costoPorUnidadBase(validado.datos);
     if (!c.ok) return '';
-    const m = unidadMayor(v.datos.unidadBase);
+    const m = unidadMayor(validado.datos.unidadBase);
     return `${formatPesos(c.valor * m.factor)} / ${m.unidad}`;
   });
 
@@ -59,21 +68,24 @@
 
   async function guardar() {
     if (guardando) return;
-    const v = validarInsumo(form, otrosNombres);
+    errorGeneral = '';
+    const v = validado;
     if (!v.ok) {
-      errores = v.errores;
+      intentado = true;
+      await tick();
+      fila?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
       return;
     }
-    errores = {};
     guardando = true;
     try {
       await onguardar(v.datos);
       if (!inicial) {
         form = vacio();
+        intentado = false;
         nombreInput?.focus();
       }
     } catch (e) {
-      errores = { general: e instanceof Error ? e.message : String(e) };
+      errorGeneral = e instanceof Error ? e.message : String(e);
     } finally {
       guardando = false;
     }
@@ -90,11 +102,12 @@
   }
 </script>
 
-<tr class="editando" onkeydown={teclas}>
+<tr class="editando" bind:this={fila} onkeydown={teclas}>
   <td>
     <input
       bind:this={nombreInput}
       bind:value={form.nombre}
+      data-atajo={inicial ? undefined : 'nuevo'}
       placeholder={inicial ? '' : 'Nuevo insumo…'}
       aria-label="Nombre"
       aria-invalid={!!errores.nombre}
@@ -144,6 +157,6 @@
 </tr>
 {#if Object.keys(errores).length}
   <tr class="errores">
-    <td colspan="6">{Object.values(errores).join(' · ')}</td>
+    <td colspan="6">{describirErrores(errores, ETIQUETAS_INSUMO)}</td>
   </tr>
 {/if}

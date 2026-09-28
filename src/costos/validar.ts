@@ -1,6 +1,6 @@
 // Parsing and validation of user-typed form values (strings) into records.
 
-import { leerNumero, leerPesos, nombreRepetido, numeroEditable, type Errores, type Resultado, type Validado } from '../lib/campos';
+import { describirErrores, leerNumero, leerPesos, nombreRepetido, numeroEditable, type Errores, type Resultado, type Validado } from '../lib/campos';
 import { pesosEditable } from '../lib/money';
 import type { Unidad, UnidadBase } from '../lib/units';
 import { costoPorUnidadBase } from './calc';
@@ -13,6 +13,14 @@ export interface InsumoForm {
   cantidad: string;
   unidadCompra: Unidad;
 }
+
+export const ETIQUETAS_INSUMO: Record<keyof InsumoForm, string> = {
+  nombre: 'Nombre',
+  unidadBase: 'Se mide en',
+  precio: 'Precio de compra',
+  cantidad: 'Cantidad comprada',
+  unidadCompra: 'Unidad de compra',
+};
 
 type DatosInsumo = Omit<Insumo, 'id' | 'actualizadoEn'>;
 
@@ -46,6 +54,14 @@ export interface CabeceraForm {
   margen: string;
   notas: string;
 }
+
+export const ETIQUETAS_CABECERA: Record<keyof CabeceraForm, string> = {
+  nombre: 'Nombre',
+  rendimiento: 'Rinde',
+  unidadRendimiento: 'Unidad',
+  margen: 'Margen',
+  notas: 'Notas',
+};
 
 type DatosCabecera = Pick<Receta, 'nombre' | 'rendimiento' | 'unidadRendimiento' | 'margen' | 'notas'>;
 
@@ -103,4 +119,11 @@ export function leerFila(f: Fila): { linea: RecetaLinea; errores: Record<string,
   }
   const monto = valor('monto', leerPesos(f.monto));
   return { linea: { ...f.linea, descripcion: f.linea.descripcion.trim(), monto }, errores };
+}
+
+const ETIQUETAS_LINEA: Record<string, string> = { cantidad: 'Cantidad', merma: 'Merma', monto: 'Monto' };
+
+/** The typing errors of a line as one message ("Cantidad: No puede ser negativo"), or '' if none. */
+export function mensajeFila(errores: Record<string, string>): string {
+  return describirErrores(errores, ETIQUETAS_LINEA);
 }

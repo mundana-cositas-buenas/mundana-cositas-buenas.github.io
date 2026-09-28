@@ -1,5 +1,8 @@
 // Minimal IndexedDB wrapper with explicit, ordered schema migrations.
 
+import { entradaHistorial } from '../costos/calc';
+import type { Insumo } from '../costos/types';
+
 export interface Registro {
   id: string;
   actualizadoEn: string; // ISO 8601
@@ -11,6 +14,7 @@ export type StoreName =
   | 'recetaLineas'
   | 'productos'
   | 'movimientos'
+  | 'historialPrecios'
   | 'meta';
 
 export const DB_NAME = 'mundana';
@@ -19,7 +23,7 @@ export const DB_NAME = 'mundana';
 // Never edit a released migration: append a new one instead.
 type Migration = (db: IDBDatabase, tx: IDBTransaction) => void;
 
-const MIGRATIONS: Migration[] = [
+export const MIGRATIONS: readonly Migration[] = [
   (db) => {
     db.createObjectStore('insumos', { keyPath: 'id' });
     db.createObjectStore('recetas', { keyPath: 'id' });
@@ -30,6 +34,17 @@ const MIGRATIONS: Migration[] = [
   },
   (_db, tx) => {
     tx.objectStore('recetaLineas').createIndex('insumoId', 'insumoId');
+  },
+  // Price history, starting with each ingredient's current cost.
+  (db, tx) => {
+    const historial = db.createObjectStore('historialPrecios', { keyPath: 'id' });
+    historial.createIndex('insumoId', 'insumoId');
+    tx.objectStore('insumos').getAll().onsuccess = (ev) => {
+      for (const i of (ev.target as IDBRequest<Insumo[]>).result) {
+        const e = entradaHistorial(i, newId(), i.actualizadoEn || new Date().toISOString());
+        if (e) historial.put(e);
+      }
+    };
   },
 ];
 
@@ -42,7 +57,7 @@ function req<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
-export function openDB(name = DB_NAME, migrations: Migration[] = MIGRATIONS): Promise<DB> {
+export function openDB(name = DB_NAME, migrations: readonly Migration[] = MIGRATIONS): Promise<DB> {
   return new Promise((resolve, reject) => {
     const r = indexedDB.open(name, migrations.length);
     r.onupgradeneeded = (ev) => {

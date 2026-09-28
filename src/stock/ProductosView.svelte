@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { porNombre } from '../lib/campos';
   import { newId, type DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
@@ -18,6 +19,13 @@
   let verInactivos = $state(false);
   let editando = $state<string | null>(null);
   let mensaje = $state('');
+
+  /** Leaves edit mode, putting the keyboard focus back on the row's Edit button. */
+  async function terminarEdicion(id: string) {
+    editando = null;
+    await tick();
+    document.querySelector<HTMLElement>(`[data-editar="${id}"]`)?.focus();
+  }
 
   const visibles = $derived(productos.filter((p) => (verInactivos || p.activo) && coincide(p.nombre, busqueda)));
   const inactivos = $derived(productos.filter((p) => !p.activo).length);
@@ -41,7 +49,7 @@
     // Replace, not merge: an emptied sale price must disappear.
     const p = await guardarProducto(db, { ...datos, id: orig.id, actualizadoEn: orig.actualizadoEn });
     productos = productos.map((x) => (x.id === p.id ? p : x)).sort(porNombre);
-    editando = null;
+    terminarEdicion(p.id);
     mensaje = '';
   }
 
@@ -63,7 +71,7 @@
 </script>
 
 <div class="barra">
-  <input type="search" bind:value={busqueda} placeholder="Buscar producto…" aria-label="Buscar producto" />
+  <input type="search" data-atajo="buscar" bind:value={busqueda} placeholder="Buscar producto…" aria-label="Buscar producto" />
   <label><input type="checkbox" bind:checked={verInactivos} /> Ver inactivos ({inactivos})</label>
   <span class="muted">{visibles.length} de {productos.length}</span>
 </div>
@@ -97,7 +105,7 @@
           enfocar
           otrosNombres={nombresSalvo(p.id)}
           onguardar={(d) => actualizar(p, d)}
-          oncancelar={() => (editando = null)}
+          oncancelar={() => terminarEdicion(p.id)}
         />
       {:else}
         {@const n = p.activo ? nivel(stockDe(p), p.stockMinimo) : 'ok'}
@@ -111,7 +119,7 @@
           <td class="num">{p.precioVenta === undefined ? '' : formatPesos(p.precioVenta)}</td>
           <td>{p.activo ? 'sí' : 'no'}</td>
           <td class="acciones">
-            <button type="button" class="secundario" onclick={() => (editando = p.id)}>Editar</button>
+            <button type="button" class="secundario" data-editar={p.id} onclick={() => (editando = p.id)}>Editar</button>
             <button type="button" class="secundario peligro" onclick={() => borrar(p)}>Borrar</button>
           </td>
         </tr>

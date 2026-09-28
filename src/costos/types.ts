@@ -10,6 +10,14 @@ export interface Insumo extends Registro {
   unidadCompra: Unidad;
 }
 
+/** An ingredient's cost at some point: recorded whenever its cost changes. */
+export interface PrecioHistorico extends Registro {
+  insumoId: string;
+  fecha: string; // ISO 8601
+  unidadBase: UnidadBase;
+  costoPorUnidadBase: Centavos; // fractional cents
+}
+
 export interface Receta extends Registro {
   nombre: string;
   rendimiento: number;

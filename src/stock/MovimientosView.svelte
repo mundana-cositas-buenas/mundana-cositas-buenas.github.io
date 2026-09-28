@@ -55,7 +55,7 @@
 
 <h2>Últimos movimientos</h2>
 <div class="barra">
-  <input type="search" bind:value={busqueda} placeholder="Filtrar por producto…" aria-label="Filtrar por producto" />
+  <input type="search" data-atajo="buscar" bind:value={busqueda} placeholder="Filtrar por producto…" aria-label="Filtrar por producto" />
   <span class="muted">
     {filas.length < filtrados.length ? `los últimos ${filas.length} de ${filtrados.length}` : `${filtrados.length}`}
   </span>

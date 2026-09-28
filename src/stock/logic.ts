@@ -1,6 +1,5 @@
 // Stock math: pure functions. Current stock is never stored, it is the sum of the movements.
 
-import { coincide, normalizar } from '../lib/texto';
 import type { Movimiento, Producto } from './types';
 
 // Quantities can be decimal (kg); round sums so 0.1 + 0.2 shows as 0.3.
@@ -66,17 +65,4 @@ export function alertas(productos: readonly Producto[], stock: ReadonlyMap<strin
       Number(b.nivel === 'agotado') - Number(a.nivel === 'agotado') ||
       a.producto.nombre.localeCompare(b.producto.nombre, 'es', { sensitivity: 'base' }),
   );
-}
-
-/**
- * The product a typed name refers to, for the keyboard-first movement form:
- * an exact name (ignoring case and accents), else the only one that matches the words typed.
- */
-export function buscarProducto<P extends Pick<Producto, 'nombre'>>(productos: readonly P[], texto: string): P | undefined {
-  if (!texto.trim()) return undefined;
-  const n = normalizar(texto);
-  const exacto = productos.find((p) => normalizar(p.nombre) === n);
-  if (exacto) return exacto;
-  const parecidos = productos.filter((p) => coincide(p.nombre, texto));
-  return parecidos.length === 1 ? parecidos[0] : undefined;
 }

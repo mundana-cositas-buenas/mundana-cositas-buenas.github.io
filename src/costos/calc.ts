@@ -3,7 +3,7 @@
 import type { Resultado } from '../lib/campos';
 import type { Centavos } from '../lib/money';
 import { aBase } from '../lib/units';
-import type { Insumo, LineaInsumo, Receta, RecetaLinea } from './types';
+import type { Insumo, LineaInsumo, PrecioHistorico, Receta, RecetaLinea } from './types';
 
 const ok = (valor: number): Resultado => ({ ok: true, valor });
 const err = (error: string): Resultado => ({ ok: false, error });
@@ -84,4 +84,38 @@ export function costoReceta(
 
 export function porId<T extends { id: string }>(xs: readonly T[]): Map<string, T> {
   return new Map(xs.map((x) => [x.id, x]));
+}
+
+// --- Price history ---
+
+/** A history entry with the ingredient's current cost, or undefined if it can't be costed. */
+export function entradaHistorial(i: Insumo, id: string, fecha: string): PrecioHistorico | undefined {
+  const c = costoPorUnidadBase(i);
+  if (!c.ok) return undefined;
+  return { id, actualizadoEn: fecha, insumoId: i.id, fecha, unidadBase: i.unidadBase, costoPorUnidadBase: c.valor };
+}
+
+/** True if `nueva` records a different cost than the last entry (renames and same-cost edits don't count). */
+export function cambioDeCosto(ultima: PrecioHistorico | undefined, nueva: PrecioHistorico): boolean {
+  if (!ultima || ultima.unidadBase !== nueva.unidadBase) return true;
+  const a = ultima.costoPorUnidadBase;
+  const b = nueva.costoPorUnidadBase;
+  return Math.abs(a - b) > 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+export interface Variacion {
+  entrada: PrecioHistorico;
+  pct?: number; // change vs the previous entry, if it's in the same unit family and not zero
+}
+
+/** History newest first, each entry with its % change vs the one before it. */
+export function variaciones(historial: readonly PrecioHistorico[]): Variacion[] {
+  const orden = [...historial].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  return orden
+    .map((entrada, i): Variacion => {
+      const prev = orden[i - 1];
+      if (!prev || prev.unidadBase !== entrada.unidadBase || !(prev.costoPorUnidadBase > 0)) return { entrada };
+      return { entrada, pct: (entrada.costoPorUnidadBase / prev.costoPorUnidadBase - 1) * 100 };
+    })
+    .reverse();
 }

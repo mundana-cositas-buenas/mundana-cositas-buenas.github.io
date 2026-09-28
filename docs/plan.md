@@ -68,7 +68,7 @@ Object stores de IndexedDB. Todos los registros llevan `id` (UUID) y `actualizad
 - **recetas**: `nombre`, `rendimiento` (cantidad de unidades que salen), `unidadRendimiento` (texto libre, "panes"), `margen` (%), `notas`.
 - **recetaLineas**: `recetaId`, `tipo` (`insumo` | `costoFijo`), `insumoId?`, `cantidad?`, `unidad?`, `mermaPct?`, `descripcion?`, `monto?`.
   - Las líneas `costoFijo` cubren gas, packaging, mano de obra.
-- **historialPrecios** (opcional, fase 2): `insumoId`, `fecha`, `costoPorUnidadBase`.
+- **historialPrecios**: `insumoId`, `fecha`, `unidadBase`, `costoPorUnidadBase` (centavos con decimales). Hecho en la Fase 5.
 
 ### Módulo stock
 - **productos**: `nombre`, `unidad` (texto libre: botella, kg, paquete), `stockMinimo`, `precioVenta?`, `activo`.
@@ -172,10 +172,18 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - Notas: lógica pura en `src/pwa/logic.ts`; `src/pwa/sw.ts` es el envoltorio y el plugin `mundana-precache` de `vite.config.ts` lo compila a `/sw.js` (autocontenido: el build falla si comparte un chunk con la app), le inyecta la lista de archivos (build + `public/`) y un hash FNV del contenido como versión del cache (`mundana-<hash>`). Cache-first para todo lo precacheado; cualquier navegación dentro del scope recibe `index.html`; el precache se baja con `cache: 'reload'` para no mezclar un `index.html` viejo del cache HTTP. El SW nuevo espera (sin `skipWaiting`) hasta que el usuario toca "Recargar" en el aviso; si hay campos escritos sin guardar (`src/pwa/ediciones.ts`) se pide confirmación. La app busca actualizaciones cada hora y al volver a la pestaña. Manifest, `start_url` y `scope` relativos (`./`), así que sirven también bajo un sub-path. Íconos generados con `node scripts/iconos.mjs` (sin herramientas de imagen). Sin SW en `npm run dev`. Tests de manifest y de `dist/` en `test/` (este último hace un build real a un directorio temporal). El SW real, la instalación y el aviso de actualización quedan **sin probar en navegador**.
 
 ### Fase 5: pulido
-- [ ] Atajos de teclado y foco correcto en formularios.
-- [ ] Validaciones y mensajes de error claros (unidades incompatibles, campos vacíos, números negativos).
-- [ ] Impresión de la lista de precios sugeridos (CSS `@media print`).
-- [ ] Historial de precios de insumos (opcional).
+- [x] Atajos de teclado y foco correcto en formularios.
+- [x] Validaciones y mensajes de error claros (unidades incompatibles, campos vacíos, números negativos).
+- [x] Impresión de la lista de precios sugeridos (CSS `@media print`).
+- [x] Historial de precios de insumos (opcional).
+- [ ] **[Manual, usuario]** Probar atajos y foco, los mensajes de error, la impresión y el historial en Chrome (ver notas).
+- Notas:
+  - **Atajos** (`src/lib/atajos.ts`, lógica pura testeada): teclas sueltas que solo funcionan fuera de los campos de texto y sin Ctrl/Alt: `r` Recetas, `i` Insumos, `p` Productos, `m` Movimientos, `a` Alertas, `b` Backup, `n` "nuevo" (primer campo para cargar), `/` buscar, `?` ayuda (también con el botón "Atajos" del pie; Esc la cierra). Las páginas marcan sus destinos con `data-atajo="nuevo"` / `data-atajo="buscar"`.
+  - **Foco**: al guardar o cancelar la edición de una fila (insumos, productos), el foco vuelve a su botón "Editar"; si falta algo, va al primer campo inválido. Al crear o duplicar una receta se abre con el nombre seleccionado (ruta `#/costos/receta/<id>/nueva`, que se limpia sola). En Movimientos el foco arranca en el producto. En una receta, agregar insumo es ahora un campo con autocompletado (como el de productos en Movimientos) en vez de un `<select>` que agregaba la línea con solo mover la flecha; Enter en una línea la da por terminada y vuelve a ese campo.
+  - **Mensajes**: los errores dicen el campo ("Precio de compra: No puede ser negativo") y, tras el primer intento de guardar, se actualizan mientras se escribe. Número mal escrito: "No es un número (ej.: 1,5 o 1.250)". En las líneas de receta el error de tipeo se muestra en la columna Costo con "(sin guardar)". Las unidades incompatibles ya tenían mensaje propio.
+  - **Impresión**: botón "Imprimir precios" en Recetas (imprime las recetas visibles, respeta la búsqueda), con la opción "Imprimir con costos"; sin ella salen solo rinde y precio sugerido. El CSS `@media print` oculta navegación, avisos, barras y botones.
+  - **Historial de precios**: store `historialPrecios` (migración 3 de IndexedDB, que carga el costo actual de cada insumo como punto de partida). `guardarInsumo` agrega una entrada en la misma transacción solo si cambió el costo por unidad base (renombrar o cambiar precio y cantidad a la vez sin cambiar el costo no cuenta); borrar un insumo borra su historial. Botón "Historial" en cada insumo, con la variación % respecto del registro anterior (solo dentro de la misma familia de unidades). El backup pasa a la versión 2 del formato e incluye el historial; los archivos de la versión 1 se siguen importando (con historial vacío).
+  - Todo lo visual y de teclado queda **sin probar en navegador**. Pasos manuales: (1) en Insumos y Productos, `n`, escribir, Enter; dejar un campo mal y ver el mensaje y el foco; editar con doble clic, Esc, y ver que el foco vuelve a "Editar". (2) `?` muestra la ayuda; probar cada tecla fuera de un campo y ver que dentro de un campo no hacen nada. (3) Nueva receta: el nombre aparece seleccionado; `n`, escribir parte de un insumo, Enter, cantidad, Enter, siguiente insumo. (4) "Imprimir precios" con y sin costos (vista previa de impresión de Chrome). (5) Cambiar el precio de un insumo y ver su historial. (6) Exportar un backup y reimportarlo.
 
 ## Riesgos a tener presentes
 
@@ -195,4 +203,4 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 2. Confirmar Svelte o TS vanilla (por defecto: Svelte).
    - Recordar: **no hay navegador disponible**. Todo se testea en Node (ver "Estrategia de testing") y lo demás queda como verificación manual del usuario.
 3. Navegador objetivo: **Windows + Chrome** (principal), Firefox posible. Ya confirmado.
-4. Fases 0 a 4 hechas (la Fase 4 espera las verificaciones manuales del usuario). Seguir con la Fase 5 (pulido).
+4. Fases 0 a 5 hechas (las Fases 4 y 5 esperan las verificaciones manuales del usuario). Queda pendiente el primer despliegue en Pages (Fase 0) y lo que surja de las pruebas manuales.
