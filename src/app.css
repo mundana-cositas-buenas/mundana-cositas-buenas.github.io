@@ -99,3 +99,234 @@ footer {
   color: var(--fg);
   border-radius: 4px;
 }
+
+.muted {
+  color: var(--muted);
+}
+
+.fuerte {
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+}
+
+.titulo {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.titulo h1 {
+  margin: 0;
+}
+
+nav.sub a {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.95rem;
+}
+
+nav.sub a[aria-current='page'] {
+  background: #e7e3d8;
+  color: var(--fg);
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #fff;
+}
+
+input[type='search'] {
+  width: 18rem;
+}
+
+input.num {
+  text-align: right;
+  width: 7rem;
+}
+
+input.corto {
+  width: 5rem;
+}
+
+input.ancho,
+.ancho input {
+  width: 100%;
+}
+
+[aria-invalid='true'] {
+  border-color: var(--error);
+  background: #fdf0ef;
+}
+
+button {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--fg);
+  border-radius: 3px;
+  background: var(--fg);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+button.secundario {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--line);
+}
+
+button.secundario:hover {
+  border-color: var(--fg);
+}
+
+button.peligro:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabla th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--fg);
+  padding: 0.3rem 0.5rem;
+}
+
+.tabla td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.25rem 0.5rem;
+  vertical-align: middle;
+}
+
+.tabla tbody tr:hover {
+  background: #f3f2ec;
+}
+
+.tabla .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabla .acciones {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tabla tr.editando {
+  background: #f6f3ea;
+}
+
+.tabla tr.errores td {
+  color: var(--error);
+  font-size: 0.85rem;
+  border-bottom: none;
+}
+
+.tabla td.compra {
+  white-space: nowrap;
+}
+
+.tabla td .error {
+  font-size: 0.85rem;
+}
+
+.tabla td.agregar {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: none;
+  padding-top: 0.5rem;
+}
+
+.cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cabecera label,
+label.notas {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  color: var(--muted);
+  gap: 0.15rem;
+}
+
+.cabecera label input {
+  color: var(--fg);
+}
+
+.cabecera label.ancho {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.cabecera .acciones {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.resumen {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 0.25rem 1.5rem;
+  margin: 1.25rem 0 0.5rem auto;
+  width: max-content;
+  font-variant-numeric: tabular-nums;
+}
+
+.resumen dt {
+  color: var(--muted);
+}
+
+.resumen dd {
+  margin: 0;
+  text-align: right;
+}
+
+.resumen dd.fuerte {
+  font-size: 1.15rem;
+}
+
+label.notas {
+  margin-top: 1rem;
+}
+
+label.notas textarea {
+  color: var(--fg);
+  width: 100%;
+  max-width: 40rem;
+}

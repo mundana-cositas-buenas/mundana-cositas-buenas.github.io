@@ -1,14 +1,17 @@
 <script lang="ts">
+  import CostosView from './costos/CostosView.svelte';
   import type { DB } from './lib/db';
-  import { SECCIONES, seccionDesdeHash } from './lib/nav';
+  import { SECCIONES, seccionDesdeHash, subruta } from './lib/nav';
   import type { PersistState } from './lib/storage';
 
   let { persistencia, db }: { persistencia: Promise<PersistState>; db: Promise<DB> } = $props();
 
-  let seccion = $state(seccionDesdeHash(location.hash));
+  let hash = $state(location.hash);
+  const seccion = $derived(seccionDesdeHash(hash));
+  const ruta = $derived(subruta(hash));
 </script>
 
-<svelte:window onhashchange={() => (seccion = seccionDesdeHash(location.hash))} />
+<svelte:window onhashchange={() => (hash = location.hash)} />
 
 <header>
   <strong class="marca">Mundana</strong>
@@ -22,10 +25,9 @@
 <main>
   {#await db}
     <p>Abriendo base de datos…</p>
-  {:then}
+  {:then db}
     {#if seccion === 'costos'}
-      <h1>Costos de recetas</h1>
-      <p class="pendiente">Próximamente: insumos y recetas.</p>
+      <CostosView {db} {ruta} />
     {:else if seccion === 'stock'}
       <h1>Stock</h1>
       <p class="pendiente">Próximamente: productos, movimientos y alertas.</p>

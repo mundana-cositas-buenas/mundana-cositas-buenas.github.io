@@ -131,13 +131,14 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - [x] `navigator.storage.persist()` al iniciar.
 
 ### Fase 1: módulo costos
-- [ ] `units.ts`, `money.ts` y `calc.ts` con tests en Vitest (empezar por aquí).
-- [ ] CRUD de insumos, en tabla editable con búsqueda por nombre.
-- [ ] CRUD de recetas con líneas (agregar, editar y quitar ingredientes, elegir unidad).
-- [ ] Vista de receta: desglose de costo por línea, total, costo por unidad, margen y precio sugerido, todo en vivo mientras se edita.
-- [ ] Líneas de costo fijo.
-- [ ] Duplicar receta (útil para variantes).
-- [ ] Listado de recetas con costo por unidad y precio sugerido de cada una.
+- [x] `units.ts`, `money.ts` y `calc.ts` con tests en Vitest (empezar por aquí).
+- [x] CRUD de insumos, en tabla editable con búsqueda por nombre.
+- [x] CRUD de recetas con líneas (agregar, editar y quitar ingredientes, elegir unidad).
+- [x] Vista de receta: desglose de costo por línea, total, costo por unidad, margen y precio sugerido, todo en vivo mientras se edita.
+- [x] Líneas de costo fijo.
+- [x] Duplicar receta (útil para variantes).
+- [x] Listado de recetas con costo por unidad y precio sugerido de cada una.
+- Nota: la lógica (unidades, dinero, cálculo, validación, persistencia) está testeada en Node; las vistas quedan **sin probar en navegador** hasta que el usuario las revise.
 
 ### Fase 2: módulo stock
 - [ ] `logic.ts` (cálculo de stock y alertas) con tests.
@@ -191,5 +192,5 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 2. Confirmar Svelte o TS vanilla (por defecto: Svelte).
    - Recordar: **no hay navegador disponible**. Todo se testea en Node (ver "Estrategia de testing") y lo demás queda como verificación manual del usuario.
 3. Navegador objetivo: **Windows + Chrome** (principal), Firefox posible. Ya confirmado.
-4. Ejecutar la Fase 0 y seguir con la Fase 1, empezando por los tests de `units.ts` y `calc.ts`.
+4. Fases 0 y 1 hechas. Seguir con la Fase 2 (stock), empezando por los tests de `stock/logic.ts`.
 5. La PWA (Fase 4) se puede adelantar a después de la Fase 0 si se quiere probar el modo offline desde el principio.

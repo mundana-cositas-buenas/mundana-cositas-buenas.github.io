@@ -11,3 +11,13 @@ export function seccionDesdeHash(hash: string): Seccion {
   const id = hash.replace(/^#\/?/, '').split('/')[0];
   return SECCIONES.find((s) => s.id === id)?.id ?? SECCIONES[0].id;
 }
+
+/** Path segments after the section: `#/costos/receta/abc` → `['receta', 'abc']`. */
+export function subruta(hash: string): string[] {
+  return hash
+    .replace(/^#\/?/, '')
+    .split('/')
+    .slice(1)
+    .filter(Boolean)
+    .map(decodeURIComponent);
+}

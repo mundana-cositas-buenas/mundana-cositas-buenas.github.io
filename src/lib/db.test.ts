@@ -26,6 +26,8 @@ describe('openDB', () => {
     expect([...db.idb.objectStoreNames].sort()).toEqual(
       ['insumos', 'meta', 'movimientos', 'productos', 'recetaLineas', 'recetas'].sort(),
     );
+    const lineas = db.idb.transaction('recetaLineas').objectStore('recetaLineas');
+    expect([...lineas.indexNames].sort()).toEqual(['insumoId', 'recetaId']);
   });
 
   it('runs only the pending migrations when upgrading', async () => {

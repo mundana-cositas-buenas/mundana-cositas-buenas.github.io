@@ -28,6 +28,9 @@ const MIGRATIONS: Migration[] = [
     db.createObjectStore('movimientos', { keyPath: 'id' }).createIndex('productoId', 'productoId');
     db.createObjectStore('meta', { keyPath: 'id' });
   },
+  (_db, tx) => {
+    tx.objectStore('recetaLineas').createIndex('insumoId', 'insumoId');
+  },
 ];
 
 export const DB_VERSION = MIGRATIONS.length;
