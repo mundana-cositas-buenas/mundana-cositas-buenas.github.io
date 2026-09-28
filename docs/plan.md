@@ -56,7 +56,7 @@ mundana/
   src/sw.ts            # service worker (o public/sw.js generado con la lista de archivos en el build)
   .github/workflows/deploy.yml
   package.json
-  vite.config.ts       # con `base` = nombre del repo para GitHub Pages
+  vite.config.ts       # `base: '/'`: el repo es el sitio de organización mundana-cositas-buenas.github.io
 ```
 
 ## Modelo de datos
@@ -124,11 +124,11 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 ## Fases
 
 ### Fase 0: esqueleto
-- [ ] Crear proyecto Vite + Svelte + TS, con Vitest y `fake-indexeddb` configurados desde el inicio.
-- [ ] Layout con navegación entre "Costos" y "Stock" (y "Backup").
-- [ ] Wrapper de IndexedDB (`db.ts`) con versionado de esquema.
-- [ ] Workflow de GitHub Actions y primer despliegue de prueba en Pages.
-- [ ] `navigator.storage.persist()` al iniciar.
+- [x] Crear proyecto Vite + Svelte + TS, con Vitest y `fake-indexeddb` configurados desde el inicio.
+- [x] Layout con navegación entre "Costos" y "Stock" (y "Backup").
+- [x] Wrapper de IndexedDB (`db.ts`) con versionado de esquema.
+- [ ] Workflow de GitHub Actions y primer despliegue de prueba en Pages. (Workflow escrito en `.github/workflows/deploy.yml`; falta configurar Pages → Source: GitHub Actions y hacer el primer push.)
+- [x] `navigator.storage.persist()` al iniciar.
 
 ### Fase 1: módulo costos
 - [ ] `units.ts`, `money.ts` y `calc.ts` con tests en Vitest (empezar por aquí).
@@ -180,7 +180,7 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - **Instalación de la PWA según el navegador**: se usará en **Windows con Chrome** (principal), posiblemente también con Firefox. Chrome permite instalarla en escritorio. **Firefox de escritorio no soporta instalar PWAs**, aunque el uso sin conexión funciona igual desde una pestaña. Por eso el modo offline no debe depender de la instalación. Probar en ambos.
 - **Datos separados por navegador**: los datos de Chrome y los de Firefox son independientes. Si se usan los dos, cada uno tendrá su propia base. Usar **un navegador como principal** y el otro solo con el backup para pasar datos.
 - **Service worker mal versionado**: puede dejar al usuario con una versión vieja atascada en cache. Mitigar con cache versionado, limpieza en `activate` y aviso de actualización.
-- **Rutas en GitHub Pages**: la app vive en `usuario.github.io/repo/`, así que `base`, `start_url`, `scope` y las rutas del service worker deben ser relativos o usar ese prefijo.
+- **Rutas en GitHub Pages**: el repo es `mundana-cositas-buenas.github.io` (sitio de organización), así que la app vive en la raíz del dominio y `base` es `/`. Si algún día se mueve a un repo de proyecto (`usuario.github.io/repo/`), `base`, `start_url`, `scope` y las rutas del service worker deben ser relativos o usar ese prefijo.
 - **Los datos son por origen**: si cambia el dominio o el nombre del repo, se pierden los datos visibles. Por eso el backup es lo que permite migrar.
 - **Errores de redondeo**: dinero en enteros y redondear solo al mostrar.
 - **Unidades**: es la fuente más probable de errores de cálculo, por eso `units.ts` se hace primero y con tests.

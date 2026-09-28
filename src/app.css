@@ -1,0 +1,101 @@
+:root {
+  --fg: #1d1d1b;
+  --bg: #fafaf7;
+  --muted: #6b6b66;
+  --line: #d9d8d2;
+  --accent: #8a4b16;
+  --error: #b3261e;
+  --warn-bg: #fff4d6;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.marca {
+  color: var(--accent);
+}
+
+nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+nav a {
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+nav a:hover {
+  background: #eeede7;
+}
+
+nav a[aria-current='page'] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+main {
+  flex: 1;
+  padding: 1rem;
+  max-width: 1200px;
+  width: 100%;
+}
+
+h1 {
+  font-size: 1.3rem;
+  margin: 0 0 1rem;
+}
+
+footer {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pendiente {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+.aviso {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: var(--warn-bg);
+  color: var(--fg);
+  border-radius: 4px;
+}
