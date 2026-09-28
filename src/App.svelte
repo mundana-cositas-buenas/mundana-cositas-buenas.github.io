@@ -1,5 +1,7 @@
 <script lang="ts">
+  import BackupView from './backup/BackupView.svelte';
   import CostosView from './costos/CostosView.svelte';
+  import { backupVencido, cambiosBackup, contar, diasDesde, ultimoBackup } from './lib/backup';
   import type { DB } from './lib/db';
   import { SECCIONES, seccionDesdeHash, subruta } from './lib/nav';
   import type { PersistState } from './lib/storage';
@@ -20,6 +22,21 @@
     cambiosStock.addEventListener('cambio', actualizar);
     return () => cambiosStock.removeEventListener('cambio', actualizar);
   });
+
+  // Stale-backup warning: rechecked on navigation (costos writes don't notify) and after a backup.
+  let sinBackup = $state<{ dias: number | undefined } | undefined>();
+  $effect(() => {
+    void hash;
+    const actualizar = async () => {
+      const d = await db;
+      const [ultimo, conteo] = await Promise.all([ultimoBackup(d), contar(d)]);
+      const hayDatos = Object.values(conteo).some((c) => c > 0);
+      sinBackup = backupVencido(ultimo, hayDatos) ? { dias: diasDesde(ultimo) } : undefined;
+    };
+    actualizar().catch(() => {});
+    cambiosBackup.addEventListener('cambio', actualizar);
+    return () => cambiosBackup.removeEventListener('cambio', actualizar);
+  });
 </script>
 
 <svelte:window onhashchange={() => (hash = location.hash)} />
@@ -39,13 +56,18 @@
   {#await db}
     <p>Abriendo base de datos…</p>
   {:then db}
+    {#if sinBackup && seccion !== 'backup'}
+      <p class="aviso aviso-backup" role="status">
+        {sinBackup.dias === undefined ? 'Todavía no hiciste ningún backup.' : `Hace ${sinBackup.dias} días que no hacés un backup.`}
+        <a href="#/backup">Hacer backup</a>
+      </p>
+    {/if}
     {#if seccion === 'costos'}
       <CostosView {db} {ruta} />
     {:else if seccion === 'stock'}
       <StockView {db} {ruta} {alertas} />
     {:else}
-      <h1>Backup</h1>
-      <p class="pendiente">Próximamente: exportar e importar.</p>
+      <BackupView {db} />
     {/if}
   {:catch err}
     <p class="error">No se pudo abrir la base de datos: {err instanceof Error ? err.message : err}</p>

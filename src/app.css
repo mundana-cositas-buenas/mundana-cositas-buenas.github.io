@@ -401,3 +401,19 @@ dl.resumen dt {
 dl.resumen dd {
   margin: 0;
 }
+
+/* Backup */
+.tabla.compacta {
+  width: auto;
+  min-width: 24rem;
+  margin-bottom: 0.75rem;
+}
+
+button.peligro-fuerte {
+  background: var(--error);
+  border-color: var(--error);
+}
+
+.aviso-backup {
+  margin: 0 0 1rem;
+}

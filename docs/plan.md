@@ -150,11 +150,12 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - Notas: anular no borra: marca `anuladoEn` y el movimiento deja de contar (queda tachado en el historial). Alerta = producto activo con stock ≤ mínimo ("bajo") o ≤ 0 ("sin stock"). Borrar un producto borra sus movimientos (se sugiere desactivarlo). La lógica y la persistencia están testeadas en Node; las vistas quedan **sin probar en navegador**.
 
 ### Fase 3: backup (imprescindible)
-- [ ] **Exportar** todo a un único JSON con `version`, `exportadoEn` y todos los stores. Descarga con nombre `mundana-AAAA-MM-DD.json`.
-- [ ] **Importar** con validación de esquema y versión, con vista previa (cantidad de registros) y confirmación antes de reemplazar. Hacer un export automático previo a la importación.
-- [ ] Guardar la fecha del último backup y mostrar un **aviso si pasaron más de 7 días**.
-- [ ] Exportar a **CSV** de productos, insumos y recetas (opcional).
-- [ ] Test de ida y vuelta: exportar, borrar todo, importar y comprobar que queda idéntico.
+- [x] **Exportar** todo a un único JSON con `version`, `exportadoEn` y todos los stores. Descarga con nombre `mundana-AAAA-MM-DD.json`.
+- [x] **Importar** con validación de esquema y versión, con vista previa (cantidad de registros) y confirmación antes de reemplazar. Hacer un export automático previo a la importación.
+- [x] Guardar la fecha del último backup y mostrar un **aviso si pasaron más de 7 días**.
+- [x] Exportar a **CSV** de productos, insumos y recetas (opcional).
+- [x] Test de ida y vuelta: exportar, borrar todo, importar y comprobar que queda idéntico.
+- Notas: formato `{ formato: 'mundana-backup', version, exportadoEn, datos: { insumos, recetas, recetaLineas, productos, movimientos } }`; `meta` (fecha del último backup) no se exporta. `version` es la versión del formato del backup (no la del esquema de IndexedDB): subirla si cambia la forma de los registros y enseñarle a `leerBackup` a convertir los archivos viejos. La validación revisa campos de cada registro, ids repetidos y referencias (líneas → receta/insumo, movimientos → producto); la importación reemplaza todo en una sola transacción. El aviso de 7 días solo aparece si hay datos. CSV con `;`, coma decimal y BOM (Excel en español). Lógica testeada en Node; la descarga real y la selección de archivo quedan **sin probar en navegador**.
 
 ### Fase 4: PWA y uso sin conexión (requisito del núcleo)
 - [ ] `manifest.webmanifest`: `name`, `short_name`, `start_url` y `scope` relativos al `base` de Pages, `display: standalone`, colores e íconos (192, 512, maskable).
@@ -193,5 +194,5 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 2. Confirmar Svelte o TS vanilla (por defecto: Svelte).
    - Recordar: **no hay navegador disponible**. Todo se testea en Node (ver "Estrategia de testing") y lo demás queda como verificación manual del usuario.
 3. Navegador objetivo: **Windows + Chrome** (principal), Firefox posible. Ya confirmado.
-4. Fases 0, 1 y 2 hechas. Seguir con la Fase 3 (backup), empezando por `lib/backup.ts` y su test de ida y vuelta.
+4. Fases 0 a 3 hechas. Seguir con la Fase 4 (PWA): manifest, íconos, plugin de Vite para la lista de precache y service worker con su lógica en funciones puras testeadas.
 5. La PWA (Fase 4) se puede adelantar a después de la Fase 0 si se quiere probar el modo offline desde el principio.
