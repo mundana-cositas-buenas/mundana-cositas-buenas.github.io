@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Mundana is an offline-first PWA for a food shop, with two independent modules: **recipe costing** (costos) and **stock**. All phases (0–5: skeleton, costos, stock, backup, PWA, polish) are implemented, deployed to Pages and checked by the user in the browser; new work is fixes or additions beyond the plan. `docs/plan.md` (in Spanish) is the source of truth for scope, stack, data model, formulas and phased checklist — read it before starting work, and tick its checkboxes as phases are completed.
+Mundana is an offline-first PWA for a food shop, with two independent modules: **recipe costing** (costos) and **stock**. The original phased plan (0–5) is complete, deployed to Pages and checked by the user in the browser; new work is fixes or additions. `docs/design.md` is the source of truth for scope, decisions, data model, rules, formulas, features, testing strategy and risks — read it before starting work, and update it when a change affects any of those.
 
 ## Keeping this file current
 
-Update this CLAUDE.md in the same change whenever something it describes changes: new or renamed commands/npm scripts, added dependencies, architecture or folder-structure decisions, new domain invariants, or when a planned item becomes real (e.g. drop "planned"/"doesn't exist yet" notes once the code lands). Keep it concise and non-obvious; don't duplicate `docs/plan.md`.
+Update this CLAUDE.md in the same change whenever something it describes changes: new or renamed commands/npm scripts, added dependencies, architecture or folder-structure decisions, new domain invariants, or when a planned item becomes real (e.g. drop "planned"/"doesn't exist yet" notes once the code lands). Keep it concise and non-obvious; don't duplicate `docs/design.md`.
 
 ## Environment
 
@@ -55,4 +55,4 @@ npm scripts: `check` = `svelte-check --fail-on-warnings` (app, `tsconfig.json`) 
 - Price history (`historialPrecios`) is appended by `guardarInsumo` in the same transaction, only when the cost per base unit changes; never write `insumos` with a bare `db.put`, and deleting an ingredient deletes its history.
 - Deleting an ingredient used by a recipe is blocked (`borrarInsumo` throws `InsumoEnUso`, via the `recetaLineas.insumoId` index).
 - Recipe lines are ordered by their `orden` field.
-- Cost formulas are in `docs/plan.md`; reference test: flour at $1000/kg, 100 g in a recipe → $100.
+- Cost formulas are in `docs/design.md`; reference test: flour at $1000/kg, 100 g in a recipe → $100.
