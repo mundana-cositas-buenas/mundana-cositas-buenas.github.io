@@ -1,35 +1,10 @@
 // Parsing and validation of user-typed form values (strings) into records.
 
-import { formatNumero, parseDecimal, parsePesos, pesosEditable } from '../lib/money';
+import { leerNumero, leerPesos, nombreRepetido, numeroEditable, type Errores, type Resultado, type Validado } from '../lib/campos';
+import { pesosEditable } from '../lib/money';
 import type { Unidad, UnidadBase } from '../lib/units';
-import { costoPorUnidadBase, type Resultado } from './calc';
+import { costoPorUnidadBase } from './calc';
 import type { Insumo, LineaCostoFijo, LineaInsumo, Receta, RecetaLinea } from './types';
-
-interface Rango {
-  min?: number; // inclusive
-  mayorQue?: number; // exclusive
-  menorQue?: number; // exclusive
-}
-
-/** Parses a decimal field and checks its range. */
-export function leerNumero(texto: string, r: Rango = {}): Resultado {
-  if (!texto.trim()) return { ok: false, error: 'Requerido' };
-  const n = parseDecimal(texto);
-  if (Number.isNaN(n)) return { ok: false, error: 'Número inválido' };
-  if (r.min !== undefined && n < r.min) return { ok: false, error: n < 0 ? 'No puede ser negativo' : `Mínimo ${r.min}` };
-  if (r.mayorQue !== undefined && n <= r.mayorQue) return { ok: false, error: `Debe ser mayor que ${r.mayorQue}` };
-  if (r.menorQue !== undefined && n >= r.menorQue) return { ok: false, error: `Debe ser menor que ${r.menorQue}` };
-  return { ok: true, valor: n };
-}
-
-/** Parses a non-negative amount of pesos into cents. */
-export function leerPesos(texto: string): Resultado {
-  if (!texto.trim()) return { ok: false, error: 'Requerido' };
-  const c = parsePesos(texto);
-  if (Number.isNaN(c)) return { ok: false, error: 'Monto inválido' };
-  if (c < 0) return { ok: false, error: 'No puede ser negativo' };
-  return { ok: true, valor: c };
-}
 
 export interface InsumoForm {
   nombre: string;
@@ -39,17 +14,13 @@ export interface InsumoForm {
   unidadCompra: Unidad;
 }
 
-export type Errores<F> = Partial<Record<keyof F | 'general', string>>;
-
-export type Validado<T, F> = { ok: true; datos: T } | { ok: false; errores: Errores<F> };
-
 type DatosInsumo = Omit<Insumo, 'id' | 'actualizadoEn'>;
 
 export function validarInsumo(f: InsumoForm, otrosNombres: readonly string[] = []): Validado<DatosInsumo, InsumoForm> {
   const errores: Errores<InsumoForm> = {};
   const nombre = f.nombre.trim();
   if (!nombre) errores.nombre = 'Requerido';
-  else if (otrosNombres.some((o) => o.trim().toLocaleLowerCase('es') === nombre.toLocaleLowerCase('es')))
+  else if (nombreRepetido(nombre, otrosNombres))
     errores.nombre = 'Ya existe un insumo con ese nombre';
   const precio = leerPesos(f.precio);
   if (!precio.ok) errores.precio = precio.error;
@@ -66,11 +37,6 @@ export function validarInsumo(f: InsumoForm, otrosNombres: readonly string[] = [
   const c = costoPorUnidadBase(datos);
   if (!c.ok) return { ok: false, errores: { unidadCompra: c.error } };
   return { ok: true, datos };
-}
-
-/** A number as an editable string: comma decimals, no thousands separator. */
-export function numeroEditable(n: number): string {
-  return formatNumero(n, 6).replaceAll('.', '');
 }
 
 export interface CabeceraForm {

@@ -1,12 +1,10 @@
 // Persistence for the costing module, on top of db.ts.
 
+import { porNombre } from '../lib/campos';
 import { idbRequest as req, newId, type DB, type Registro } from '../lib/db';
 import type { Insumo, Receta, RecetaLinea } from './types';
 
 const sello = <T extends Registro>(r: T): T => ({ ...r, actualizadoEn: new Date().toISOString() });
-
-export const porNombre = <T extends { nombre: string }>(a: T, b: T) =>
-  a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' });
 
 const porOrden = (a: RecetaLinea, b: RecetaLinea) => a.orden - b.orden;
 

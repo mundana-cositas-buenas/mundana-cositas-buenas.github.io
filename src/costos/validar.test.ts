@@ -4,26 +4,10 @@ import {
   cabeceraDesde,
   filaDesde,
   leerFila,
-  leerNumero,
-  leerPesos,
-  numeroEditable,
   validarCabecera,
   validarInsumo,
   type InsumoForm,
 } from './validar';
-
-describe('leerNumero / leerPesos', () => {
-  it('parses and checks ranges', () => {
-    expect(leerNumero('1,5')).toEqual({ ok: true, valor: 1.5 });
-    expect(leerNumero('')).toEqual({ ok: false, error: 'Requerido' });
-    expect(leerNumero('x')).toEqual({ ok: false, error: 'Número inválido' });
-    expect(leerNumero('-1', { min: 0 })).toEqual({ ok: false, error: 'No puede ser negativo' });
-    expect(leerNumero('0', { mayorQue: 0 }).ok).toBe(false);
-    expect(leerNumero('100', { min: 0, menorQue: 100 }).ok).toBe(false);
-    expect(leerPesos('1.000')).toEqual({ ok: true, valor: 100000 });
-    expect(leerPesos('-1').ok).toBe(false);
-  });
-});
 
 describe('validarInsumo', () => {
   const form: InsumoForm = { nombre: ' Harina ', unidadBase: 'g', precio: '1000', cantidad: '1', unidadCompra: 'kg' };
@@ -62,7 +46,6 @@ describe('recipe header', () => {
   };
 
   it('round-trips through the form', () => {
-    expect(numeroEditable(1500.25)).toBe('1500,25');
     expect(cabeceraDesde(receta)).toEqual({ nombre: 'Pan', rendimiento: '1,5', unidadRendimiento: 'kg', margen: '40', notas: 'n' });
     expect(validarCabecera(cabeceraDesde(receta))).toEqual({
       ok: true,

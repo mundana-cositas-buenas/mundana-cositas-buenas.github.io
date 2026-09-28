@@ -330,3 +330,74 @@ label.notas textarea {
   width: 100%;
   max-width: 40rem;
 }
+
+h2 {
+  font-size: 1.1rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.badge {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.35em;
+  border-radius: 0.7em;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4em;
+  text-align: center;
+}
+
+/* Stock levels: rows in tables, or a single value. */
+.tabla tr.bajo,
+.tabla tr.bajo:hover {
+  background: var(--warn-bg);
+}
+
+.tabla tr.agotado,
+.tabla tr.agotado:hover {
+  background: #fdf0ef;
+}
+
+.tabla tr.agotado td.fuerte,
+dd.agotado {
+  color: var(--error);
+}
+
+dd.bajo {
+  background: var(--warn-bg);
+  padding: 0 0.3rem;
+}
+
+.tabla tr.inactivo td,
+.tabla tr.anulado td {
+  color: var(--muted);
+}
+
+.tabla tr.anulado td:not(.acciones) {
+  text-decoration: line-through;
+}
+
+form.rapido {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+dl.resumen {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 0.2rem 1rem;
+  margin: 0 0 1rem;
+}
+
+dl.resumen dt {
+  color: var(--muted);
+}
+
+dl.resumen dd {
+  margin: 0;
+}

@@ -1,10 +1,9 @@
 // Recipe costing: pure functions. Results are fractional cents; round only on display.
 
+import type { Resultado } from '../lib/campos';
 import type { Centavos } from '../lib/money';
 import { aBase } from '../lib/units';
 import type { Insumo, LineaInsumo, Receta, RecetaLinea } from './types';
-
-export type Resultado = { ok: true; valor: number } | { ok: false; error: string };
 
 const ok = (valor: number): Resultado => ({ ok: true, valor });
 const err = (error: string): Resultado => ({ ok: false, error });

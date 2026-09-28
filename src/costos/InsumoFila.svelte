@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { numeroEditable, type Errores } from '../lib/campos';
   import { formatPesos, pesosEditable } from '../lib/money';
   import { baseDe, UNIDADES_BASE, unidadesDe, unidadMayor, type UnidadBase } from '../lib/units';
   import { costoPorUnidadBase } from './calc';
   import type { Insumo } from './types';
-  import { numeroEditable, validarInsumo, type Errores, type InsumoForm } from './validar';
+  import { validarInsumo, type InsumoForm } from './validar';
 
   let {
     inicial,

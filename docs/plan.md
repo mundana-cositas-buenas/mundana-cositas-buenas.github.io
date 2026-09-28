@@ -72,7 +72,7 @@ Object stores de IndexedDB. Todos los registros llevan `id` (UUID) y `actualizad
 
 ### Módulo stock
 - **productos**: `nombre`, `unidad` (texto libre: botella, kg, paquete), `stockMinimo`, `precioVenta?`, `activo`.
-- **movimientos**: `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad` (positiva; el signo se deduce del tipo, o con signo en el caso de `ajuste`), `fecha`, `nota?`.
+- **movimientos**: `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad` (positiva; el signo se deduce del tipo, o con signo en el caso de `ajuste`), `fecha`, `nota?`, `anuladoEn?` (movimiento anulado: queda en el historial pero no cuenta).
   - **El stock actual se calcula sumando los movimientos.** No se guarda como número editable, así hay historial y se puede deshacer una venta.
   - Si el rendimiento se vuelve un problema, guardar un `stockCache` en el producto y recalcularlo dentro de la misma transacción.
 
@@ -141,12 +141,13 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 - Nota: la lógica (unidades, dinero, cálculo, validación, persistencia) está testeada en Node; las vistas quedan **sin probar en navegador** hasta que el usuario las revise.
 
 ### Fase 2: módulo stock
-- [ ] `logic.ts` (cálculo de stock y alertas) con tests.
-- [ ] CRUD de productos.
-- [ ] Registro rápido de movimientos (entrada, venta, ajuste), pensado para teclado: elegir producto, cantidad, Enter.
-- [ ] Listado de productos con stock actual, resaltando en color los que están bajo el mínimo.
-- [ ] Panel de **Alertas** de stock bajo, más un badge con el contador visible en la navegación.
-- [ ] Historial de movimientos por producto, con posibilidad de anular un movimiento.
+- [x] `logic.ts` (cálculo de stock y alertas) con tests.
+- [x] CRUD de productos.
+- [x] Registro rápido de movimientos (entrada, venta, ajuste), pensado para teclado: elegir producto, cantidad, Enter.
+- [x] Listado de productos con stock actual, resaltando en color los que están bajo el mínimo.
+- [x] Panel de **Alertas** de stock bajo, más un badge con el contador visible en la navegación.
+- [x] Historial de movimientos por producto, con posibilidad de anular un movimiento.
+- Notas: anular no borra: marca `anuladoEn` y el movimiento deja de contar (queda tachado en el historial). Alerta = producto activo con stock ≤ mínimo ("bajo") o ≤ 0 ("sin stock"). Borrar un producto borra sus movimientos (se sugiere desactivarlo). La lógica y la persistencia están testeadas en Node; las vistas quedan **sin probar en navegador**.
 
 ### Fase 3: backup (imprescindible)
 - [ ] **Exportar** todo a un único JSON con `version`, `exportadoEn` y todos los stores. Descarga con nombre `mundana-AAAA-MM-DD.json`.
@@ -192,5 +193,5 @@ Claude debe decir explícitamente cuando algo quedó **sin probar en navegador**
 2. Confirmar Svelte o TS vanilla (por defecto: Svelte).
    - Recordar: **no hay navegador disponible**. Todo se testea en Node (ver "Estrategia de testing") y lo demás queda como verificación manual del usuario.
 3. Navegador objetivo: **Windows + Chrome** (principal), Firefox posible. Ya confirmado.
-4. Fases 0 y 1 hechas. Seguir con la Fase 2 (stock), empezando por los tests de `stock/logic.ts`.
+4. Fases 0, 1 y 2 hechas. Seguir con la Fase 3 (backup), empezando por `lib/backup.ts` y su test de ida y vuelta.
 5. La PWA (Fase 4) se puede adelantar a después de la Fase 0 si se quiere probar el modo offline desde el principio.

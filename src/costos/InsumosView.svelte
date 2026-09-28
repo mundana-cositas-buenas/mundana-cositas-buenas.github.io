@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { porNombre } from '../lib/campos';
   import { newId, type DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
   import { coincide } from '../lib/texto';
   import { unidadMayor } from '../lib/units';
   import { costoPorUnidadBase } from './calc';
   import InsumoFila from './InsumoFila.svelte';
-  import { borrarInsumo, guardarInsumo, InsumoEnUso, listarInsumos, porNombre, recetasQueUsan } from './repo';
+  import { borrarInsumo, guardarInsumo, InsumoEnUso, listarInsumos, recetasQueUsan } from './repo';
   import type { Insumo } from './types';
 
   let { db }: { db: DB } = $props();
