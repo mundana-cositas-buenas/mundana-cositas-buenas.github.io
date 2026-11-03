@@ -1,4 +1,3 @@
-* hacer que el precio de venta de un producto sea obligatorio
 * agregar movimiento de stock como una venta de varios productos
   * ejemplo, ahora si una venta lleva varias cosas hay que agregar por producto
   * la idea sería que dentro de una misma venta se agreguen varios productos

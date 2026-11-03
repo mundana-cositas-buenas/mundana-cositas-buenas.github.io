@@ -10,6 +10,10 @@ Mundana is an offline-first PWA for a food shop, with two independent modules: *
 
 Update this CLAUDE.md in the same change whenever something it describes changes: new or renamed commands/npm scripts, added dependencies, architecture or folder-structure decisions, new domain invariants, or when a planned item becomes real (e.g. drop "planned"/"doesn't exist yet" notes once the code lands). Keep it concise and non-obvious; don't duplicate `docs/design.md`.
 
+## Git
+
+Only run read-only git commands (`status`, `diff`, `log`, `show`, `blame`, `grep`, `branch`/`tag` listing…). Anything that changes the repo, index, refs or remote (`add`, `commit`, `restore`, `checkout`, `stash`, `reset`, `merge`, `rebase`, `push`…) needs the user's explicit approval first. By default, leave changes uncommitted in the working tree so the user can review and commit them.
+
 ## Environment
 
 Claude runs inside the `mundana/site` Docker container (`docker/devel.sh`, repo mounted at `/opt/mundana/site`). **No browser is installed and none can be installed.** All automated tests must run in Node (Vitest, `fake-indexeddb`, optionally jsdom/happy-dom) — never Playwright, Puppeteer, Selenium or a real browser. Anything that needs a real browser (PWA install, real offline start, SW update flow, visual/keyboard UX, backup download/file picker) must be reported explicitly as **untested in browser**, with a short list of manual steps for the user.
