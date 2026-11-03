@@ -179,7 +179,7 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
       if (r.tipo === 'costoFijo') return { ...LINEA, descripcion: texto, monto: centavos };
       return 'tipo de línea desconocido';
     case 'productos':
-      return { ...REGISTRO, nombre: texto, unidad: texto, stockMinimo: noNegativo, precioVenta: opcional(centavos), activo: booleano };
+      return { ...REGISTRO, nombre: texto, unidad: texto, stockMinimo: noNegativo, costo: opcional(centavos), precioVenta: opcional(centavos), activo: booleano };
     case 'movimientos':
       return {
         ...REGISTRO,

@@ -4,7 +4,7 @@
   import { newId, type DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
   import { coincide } from '../lib/texto';
-  import { nivel } from './logic';
+  import { nivel, valorInventario } from './logic';
   import ProductoFila from './ProductoFila.svelte';
   import { borrarProducto, contarMovimientos, guardarProducto, listarProductos, stockActualDe } from './repo';
   import type { Producto } from './types';
@@ -29,6 +29,9 @@
 
   const visibles = $derived(productos.filter((p) => (verInactivos || p.activo) && coincide(p.nombre, busqueda)));
   const inactivos = $derived(productos.filter((p) => !p.activo).length);
+  // Over every product, not just the visible ones; hidden until some product has a cost.
+  const conCosto = $derived(productos.some((p) => p.costo !== undefined));
+  const inventario = $derived(valorInventario(productos, stock));
 
   async function cargar() {
     [productos, stock] = await Promise.all([listarProductos(db), stockActualDe(db)]);
@@ -46,7 +49,7 @@
   }
 
   async function actualizar(orig: Producto, datos: DatosProducto) {
-    // Replace, not merge: an emptied sale price must disappear.
+    // Replace, not merge: an emptied cost or sale price must disappear.
     const p = await guardarProducto(db, { ...datos, id: orig.id, actualizadoEn: orig.actualizadoEn });
     productos = productos.map((x) => (x.id === p.id ? p : x)).sort(porNombre);
     terminarEdicion(p.id);
@@ -74,6 +77,14 @@
   <input type="search" data-atajo="buscar" bind:value={busqueda} placeholder="Buscar producto…" aria-label="Buscar producto" />
   <label><input type="checkbox" bind:checked={verInactivos} /> Ver inactivos ({inactivos})</label>
   <span class="muted">{visibles.length} de {productos.length}</span>
+  {#if conCosto}
+    <span>
+      Valor del stock: <strong>{formatPesos(inventario.total)}</strong>
+      {#if inventario.sinCosto}
+        <span class="muted">({inventario.sinCosto} {inventario.sinCosto === 1 ? 'producto' : 'productos'} con stock sin costo)</span>
+      {/if}
+    </span>
+  {/if}
 </div>
 
 {#if mensaje}
@@ -87,6 +98,7 @@
       <th>Unidad</th>
       <th class="num">Stock</th>
       <th class="num">Mínimo</th>
+      <th class="num">Costo</th>
       <th class="num">Precio de venta</th>
       <th>Activo</th>
       <th></th>
@@ -95,7 +107,7 @@
   <tbody>
     <ProductoFila otrosNombres={nombresSalvo()} onguardar={agregar} />
     {#if cargando}
-      <tr><td colspan="7" class="muted">Cargando…</td></tr>
+      <tr><td colspan="8" class="muted">Cargando…</td></tr>
     {/if}
     {#each visibles as p (p.id)}
       {#if editando === p.id}
@@ -116,6 +128,7 @@
             {formatNumero(stockDe(p))}
           </td>
           <td class="num">{formatNumero(p.stockMinimo)}</td>
+          <td class="num">{p.costo === undefined ? '' : formatPesos(p.costo)}</td>
           <td class="num">{p.precioVenta === undefined ? '' : formatPesos(p.precioVenta)}</td>
           <td>{p.activo ? 'sí' : 'no'}</td>
           <td class="acciones">

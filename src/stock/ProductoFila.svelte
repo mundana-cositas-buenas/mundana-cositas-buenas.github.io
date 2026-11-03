@@ -3,7 +3,7 @@
   import { describirErrores, type Errores } from '../lib/campos';
   import { formatNumero } from '../lib/money';
   import type { Producto } from './types';
-  import { ETIQUETAS_PRODUCTO, productoFormDesde, productoVacio, validarProducto, type DatosProducto, type ProductoForm } from './validar';
+  import { avisosProducto, ETIQUETAS_PRODUCTO, productoFormDesde, productoVacio, validarProducto, type DatosProducto, type ProductoForm } from './validar';
 
   let {
     inicial,
@@ -35,6 +35,8 @@
     ...(intentado && !validado.ok ? validado.errores : {}),
     ...(errorGeneral ? { general: errorGeneral } : {}),
   });
+  // Warnings don't block saving, so they show right away.
+  const avisos = $derived(validado.ok ? avisosProducto(validado.datos) : {});
 
   $effect(() => {
     if (enfocar) nombreInput?.focus();
@@ -105,6 +107,17 @@
     <input
       class="num"
       inputmode="decimal"
+      bind:value={form.costo}
+      placeholder="$ (opcional)"
+      aria-label="Costo"
+      aria-invalid={!!errores.costo}
+      title={errores.costo ?? avisos.costo}
+    />
+  </td>
+  <td class="num">
+    <input
+      class="num"
+      inputmode="decimal"
       bind:value={form.precioVenta}
       placeholder="$ (opcional)"
       aria-label="Precio de venta"
@@ -122,6 +135,10 @@
 </tr>
 {#if Object.keys(errores).length}
   <tr class="errores">
-    <td colspan="7">{describirErrores(errores, ETIQUETAS_PRODUCTO)}</td>
+    <td colspan="8">{describirErrores(errores, ETIQUETAS_PRODUCTO)}</td>
+  </tr>
+{:else if Object.keys(avisos).length}
+  <tr class="avisos">
+    <td colspan="8">{describirErrores(avisos, ETIQUETAS_PRODUCTO)}</td>
   </tr>
 {/if}

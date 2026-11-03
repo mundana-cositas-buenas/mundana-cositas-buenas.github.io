@@ -2,12 +2,14 @@
 
 import { leerNumero, leerPesos, nombreRepetido, numeroEditable, type Errores, type Validado } from '../lib/campos';
 import { pesosEditable } from '../lib/money';
+import { rentabilidad } from './logic';
 import type { Movimiento, Producto, TipoMovimiento } from './types';
 
 export interface ProductoForm {
   nombre: string;
   unidad: string;
   stockMinimo: string;
+  costo: string;
   precioVenta: string;
   activo: boolean;
 }
@@ -16,25 +18,27 @@ export const ETIQUETAS_PRODUCTO: Record<keyof ProductoForm, string> = {
   nombre: 'Nombre',
   unidad: 'Unidad',
   stockMinimo: 'Stock mínimo',
+  costo: 'Costo',
   precioVenta: 'Precio de venta',
   activo: 'Activo',
 };
 
 export type DatosProducto = Omit<Producto, 'id' | 'actualizadoEn'>;
 
-export const productoVacio = (): ProductoForm => ({ nombre: '', unidad: '', stockMinimo: '', precioVenta: '', activo: true });
+export const productoVacio = (): ProductoForm => ({ nombre: '', unidad: '', stockMinimo: '', costo: '', precioVenta: '', activo: true });
 
 export function productoFormDesde(p: Producto): ProductoForm {
   return {
     nombre: p.nombre,
     unidad: p.unidad,
     stockMinimo: numeroEditable(p.stockMinimo),
+    costo: p.costo === undefined ? '' : pesosEditable(p.costo),
     precioVenta: p.precioVenta === undefined ? '' : pesosEditable(p.precioVenta),
     activo: p.activo,
   };
 }
 
-/** Empty unit means "u", empty minimum means 0, empty price means none. */
+/** Empty unit means "u", empty minimum means 0, empty cost or price means none. */
 export function validarProducto(f: ProductoForm, otrosNombres: readonly string[] = []): Validado<DatosProducto, ProductoForm> {
   const errores: Errores<ProductoForm> = {};
   const nombre = f.nombre.trim();
@@ -42,12 +46,21 @@ export function validarProducto(f: ProductoForm, otrosNombres: readonly string[]
   else if (nombreRepetido(nombre, otrosNombres)) errores.nombre = 'Ya existe un producto con ese nombre';
   const minimo = leerNumero(f.stockMinimo || '0', { min: 0 });
   if (!minimo.ok) errores.stockMinimo = minimo.error;
+  const costo = f.costo.trim() ? leerPesos(f.costo) : undefined;
+  if (costo && !costo.ok) errores.costo = costo.error;
   const precio = f.precioVenta.trim() ? leerPesos(f.precioVenta) : undefined;
   if (precio && !precio.ok) errores.precioVenta = precio.error;
-  if (Object.keys(errores).length || !minimo.ok || (precio && !precio.ok)) return { ok: false, errores };
+  if (Object.keys(errores).length || !minimo.ok || (costo && !costo.ok) || (precio && !precio.ok)) return { ok: false, errores };
   const datos: DatosProducto = { nombre, unidad: f.unidad.trim() || 'u', stockMinimo: minimo.valor, activo: f.activo };
+  if (costo) datos.costo = costo.valor;
   if (precio) datos.precioVenta = precio.valor;
   return { ok: true, datos };
+}
+
+/** Warnings that don't block saving, as field → message (selling at a loss can be on purpose). */
+export function avisosProducto(d: DatosProducto): Errores<ProductoForm> {
+  const r = rentabilidad(d);
+  return r && r.ganancia < 0 ? { costo: 'Es mayor que el precio de venta' } : {};
 }
 
 export const TIPOS: readonly { id: TipoMovimiento; titulo: string }[] = [

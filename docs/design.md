@@ -39,7 +39,7 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **historialPrecios** (price history): `insumoId`, `fecha`, `unidadBase`, `costoPorUnidadBase` (fractional cents). A new entry is added, in the same transaction as the ingredient, only when its cost per base unit changes.
 
 ### Stock
-- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `precioVenta?`, `activo`.
+- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta?`, `activo`.
 - **movimientos** (stock movements): `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad`, `fecha`, `nota?`, `anuladoEn?`.
   - `cantidad` is positive for entries and sales (the type gives the sign), and signed for adjustments.
   - A movement is never edited or deleted on its own: cancelling ("anular") sets `anuladoEn`, so it stops counting but stays in the history.
@@ -69,6 +69,17 @@ precioSugerido     = costoPorUnidad * (1 + margen/100)
 
 Reference example (it is a test): flour at $1000/kg and a recipe with 100 g gives $100 of flour.
 
+## Formulas (stock)
+
+```
+ganancia      = precioVenta - costo              (per unit; needs both, negative = selling at a loss)
+margen %      = ganancia / costo * 100           (over the cost, like the recipes; none when costo is 0)
+valorStock    = max(stock, 0) * costo            (rounded to whole cents; none without a cost)
+valor total   = sum(valorStock) over every product, active or not
+```
+
+Products with stock but no cost are left out of the total and counted, so the UI can say so.
+
 ## Features
 
 ### Costing
@@ -78,7 +89,8 @@ Reference example (it is a test): flour at $1000/kg and a recipe with 100 g give
 - Recipe list with cost per unit and suggested price, printable as a price list (with or without costs).
 
 ### Stock
-- Products table with current stock, highlighting low and out-of-stock ones.
+- Products table with current stock, highlighting low and out-of-stock ones, and the total stock value above it (shown once some product has a cost).
+- Optional cost per product. Editing a product warns, without blocking the save, when the cost is over the sale price. The product page shows cost, profit and margin (in red when it's a loss) and the stock value.
 - Keyboard-first movement entry: product (type to pick), quantity, Enter. Warns before stock would go negative.
 - Alerts panel and a low-stock counter badge in the navigation.
 - Per-product movement history, with cancelling.
@@ -89,7 +101,7 @@ Reference example (it is a test): flour at $1000/kg and a recipe with 100 g give
   `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history.
 - **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product). It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
 - The date of the last backup is kept, and the app warns when there is data and no backup in more than **7 days**.
-- **CSV** exports of products, ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
+- **CSV** exports of products (with cost, profit, margin and stock value), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
 - The app asks for persistent storage (`navigator.storage.persist()`) at startup and again when installed, and says so if the browser doesn't grant it.
 
 ### Offline and updates (PWA)

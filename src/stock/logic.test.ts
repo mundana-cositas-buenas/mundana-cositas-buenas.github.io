@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertas, efecto, historial, nivel, stockActual, stockPorProducto } from './logic';
+import { alertas, efecto, historial, nivel, rentabilidad, stockActual, stockPorProducto, valorInventario, valorStock } from './logic';
 import type { Movimiento, Producto, TipoMovimiento } from './types';
 
 let n = 0;
@@ -79,5 +79,57 @@ describe('alertas', () => {
       ['te', 'agotado', 0, 0],
       ['vino', 'bajo', 3, 2],
     ]);
+  });
+});
+
+describe('rentabilidad', () => {
+  it('gives profit per unit and margin over the cost', () => {
+    expect(rentabilidad({ costo: 100000, precioVenta: 150000 })).toEqual({ ganancia: 50000, margen: 50 });
+  });
+
+  it('shows a loss as negative', () => {
+    expect(rentabilidad({ costo: 2000, precioVenta: 1500 })).toEqual({ ganancia: -500, margen: -25 });
+  });
+
+  it('has no margin with a zero cost', () => {
+    expect(rentabilidad({ costo: 0, precioVenta: 1500 })).toEqual({ ganancia: 1500 });
+  });
+
+  it('needs both cost and sale price', () => {
+    expect(rentabilidad({ costo: 1000 })).toBeUndefined();
+    expect(rentabilidad({ precioVenta: 1000 })).toBeUndefined();
+  });
+});
+
+describe('valorStock', () => {
+  it('multiplies stock by cost, rounding to whole cents', () => {
+    expect(valorStock(20, 100000)).toBe(2000000);
+    expect(valorStock(0.333, 1000)).toBe(333);
+  });
+
+  it('is zero without stock and undefined without a cost', () => {
+    expect(valorStock(0, 1000)).toBe(0);
+    expect(valorStock(-3, 1000)).toBe(0);
+    expect(valorStock(5, undefined)).toBeUndefined();
+  });
+});
+
+describe('valorInventario', () => {
+  it('adds active and inactive products, and counts the ones with stock but no cost', () => {
+    const ps = [
+      { ...producto('miel', 0), costo: 1000 },
+      { ...producto('dulce', 0, false), costo: 500 },
+      producto('vino', 0), // stock, no cost
+      producto('te', 0), // no stock, no cost: doesn't count as missing
+      { ...producto('agua', 0), costo: 100 }, // negative stock
+    ];
+    const stock = new Map([
+      ['miel', 3],
+      ['dulce', 2],
+      ['vino', 4],
+      ['agua', -1],
+    ]);
+    expect(valorInventario(ps, stock)).toEqual({ total: 4000, sinCosto: 1 });
+    expect(valorInventario([], stock)).toEqual({ total: 0, sinCosto: 0 });
   });
 });

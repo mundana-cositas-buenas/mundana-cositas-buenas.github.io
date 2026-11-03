@@ -5,6 +5,7 @@ export interface Producto extends Registro {
   nombre: string;
   unidad: string; // free text: "botella", "kg", "paquete"
   stockMinimo: number;
+  costo?: Centavos; // per unit, typed by hand
   precioVenta?: Centavos;
   activo: boolean;
 }

@@ -1,5 +1,6 @@
 // Stock math: pure functions. Current stock is never stored, it is the sum of the movements.
 
+import type { Centavos } from '../lib/money';
 import type { Movimiento, Producto } from './types';
 
 // Quantities can be decimal (kg); round sums so 0.1 + 0.2 shows as 0.3.
@@ -65,4 +66,38 @@ export function alertas(productos: readonly Producto[], stock: ReadonlyMap<strin
       Number(b.nivel === 'agotado') - Number(a.nivel === 'agotado') ||
       a.producto.nombre.localeCompare(b.producto.nombre, 'es', { sensitivity: 'base' }),
   );
+}
+
+export interface Rentabilidad {
+  ganancia: Centavos; // per unit: sale price minus cost; negative when selling at a loss
+  margen?: number; // % over the cost, like the recipes' margin; undefined when the cost is 0
+}
+
+/** Profit per unit; undefined unless the product has both a cost and a sale price. */
+export function rentabilidad(p: Pick<Producto, 'costo' | 'precioVenta'>): Rentabilidad | undefined {
+  if (p.costo === undefined || p.precioVenta === undefined) return undefined;
+  const ganancia = p.precioVenta - p.costo;
+  return p.costo > 0 ? { ganancia, margen: (ganancia / p.costo) * 100 } : { ganancia };
+}
+
+/** What the stock on hand cost, in whole cents; 0 with no stock (or negative); undefined without a cost. */
+export function valorStock(stock: number, costo: Centavos | undefined): Centavos | undefined {
+  if (costo === undefined) return undefined;
+  return stock > 0 ? Math.round(stock * costo) : 0;
+}
+
+/**
+ * Total value of the stock on hand, active and inactive products alike.
+ * `sinCosto` counts the products with stock but no cost, which the total leaves out.
+ */
+export function valorInventario(productos: readonly Producto[], stock: ReadonlyMap<string, number>): { total: Centavos; sinCosto: number } {
+  let total = 0;
+  let sinCosto = 0;
+  for (const p of productos) {
+    const s = stock.get(p.id) ?? 0;
+    const v = valorStock(s, p.costo);
+    if (v !== undefined) total += v;
+    else if (s > 0) sinCosto++;
+  }
+  return { total, sinCosto };
 }

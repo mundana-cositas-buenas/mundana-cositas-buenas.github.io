@@ -61,7 +61,7 @@ const lineaInsumo: LineaInsumo = {
   mermaPct: 0,
 };
 const lineaFija: LineaCostoFijo = { id: 'l2', actualizadoEn: T, recetaId: 'r1', orden: 1, tipo: 'costoFijo', descripcion: 'Gas', monto: 5000 };
-const producto: Producto = { id: 'p1', actualizadoEn: T, nombre: 'Miel', unidad: 'frasco', stockMinimo: 2, activo: true };
+const producto: Producto = { id: 'p1', actualizadoEn: T, nombre: 'Miel', unidad: 'frasco', stockMinimo: 2, costo: 120000, activo: true };
 const movs: Movimiento[] = [
   { id: 'm1', actualizadoEn: T, productoId: 'p1', tipo: 'entrada', cantidad: 10, fecha: T },
   { id: 'm2', actualizadoEn: T, productoId: 'p1', tipo: 'venta', cantidad: 3, fecha: T, nota: 'feria', anuladoEn: T },
@@ -223,6 +223,9 @@ describe('leerBackup', () => {
   it('allows optional fields to be absent but not wrong', () => {
     expect(errores(json((b) => (b.datos.productos[0].precioVenta = 1500)))).toEqual([]);
     expect(errores(json((b) => (b.datos.productos[0].precioVenta = '15')))).toHaveLength(1);
+    expect(errores(json((b) => (b.datos.productos[0].costo = 900)))).toEqual([]);
+    expect(errores(json((b) => (b.datos.productos[0].costo = -1)))).toHaveLength(1);
+    expect(errores(json((b) => (b.datos.productos[0].costo = 9.5)))).toHaveLength(1);
     expect(errores(json((b) => (b.datos.movimientos[1].anuladoEn = 'ayer')))).toHaveLength(1);
   });
 

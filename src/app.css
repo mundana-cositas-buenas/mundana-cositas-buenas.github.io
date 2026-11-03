@@ -257,6 +257,12 @@ button:disabled {
   border-bottom: none;
 }
 
+.tabla tr.avisos td {
+  background: var(--warn-bg);
+  font-size: 0.85rem;
+  border-bottom: none;
+}
+
 .tabla td.compra {
   white-space: nowrap;
 }

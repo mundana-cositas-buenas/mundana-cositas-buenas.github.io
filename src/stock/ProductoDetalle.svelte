@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
-  import { historial, nivel, stockActual } from './logic';
+  import { historial, nivel, rentabilidad, stockActual, valorStock } from './logic';
   import MovimientoRapido from './MovimientoRapido.svelte';
   import MovimientosTabla from './MovimientosTabla.svelte';
   import { movimientosDe, obtenerProducto } from './repo';
@@ -16,6 +16,8 @@
   const stock = $derived(stockActual(movimientos));
   const estado = $derived(producto ? nivel(stock, producto.stockMinimo) : 'ok');
   const filas = $derived(historial(movimientos));
+  const renta = $derived(producto && rentabilidad(producto));
+  const valor = $derived(producto && valorStock(stock, producto.costo));
 
   async function cargar(id: string) {
     cargando = true;
@@ -39,9 +41,25 @@
     <dd class="fuerte {estado}">{formatNumero(stock)} {producto.unidad}</dd>
     <dt>Mínimo</dt>
     <dd>{formatNumero(producto.stockMinimo)}</dd>
+    {#if producto.costo !== undefined}
+      <dt>Costo</dt>
+      <dd>{formatPesos(producto.costo)}</dd>
+    {/if}
     {#if producto.precioVenta !== undefined}
       <dt>Precio de venta</dt>
       <dd>{formatPesos(producto.precioVenta)}</dd>
+    {/if}
+    {#if renta}
+      <dt>Ganancia</dt>
+      <dd class:error={renta.ganancia < 0}>{formatPesos(renta.ganancia)}</dd>
+      {#if renta.margen !== undefined}
+        <dt>Margen</dt>
+        <dd class:error={renta.ganancia < 0}>{formatNumero(renta.margen, 1)} %</dd>
+      {/if}
+    {/if}
+    {#if valor !== undefined}
+      <dt>Valor del stock</dt>
+      <dd>{formatPesos(valor)}</dd>
     {/if}
   </dl>
 
