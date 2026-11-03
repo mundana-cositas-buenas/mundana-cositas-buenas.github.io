@@ -221,6 +221,8 @@ describe('leerBackup', () => {
   });
 
   it('allows optional fields to be absent but not wrong', () => {
+    // Products saved before the sale price became required may lack it.
+    expect(backup().datos.productos[0].precioVenta).toBeUndefined();
     expect(errores(json((b) => (b.datos.productos[0].precioVenta = 1500)))).toEqual([]);
     expect(errores(json((b) => (b.datos.productos[0].precioVenta = '15')))).toHaveLength(1);
     expect(errores(json((b) => (b.datos.productos[0].costo = 900)))).toEqual([]);

@@ -39,7 +39,7 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **historialPrecios** (price history): `insumoId`, `fecha`, `unidadBase`, `costoPorUnidadBase` (fractional cents). A new entry is added, in the same transaction as the ingredient, only when its cost per base unit changes.
 
 ### Stock
-- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta?`, `activo`.
+- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta` (required on every save, zero allowed; products saved before it became required may lack it, the list and product page show them as "Sin precio" until edited, and backups without it still import), `activo`.
 - **movimientos** (stock movements): `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad`, `fecha`, `nota?`, `anuladoEn?`.
   - `cantidad` is positive for entries and sales (the type gives the sign), and signed for adjustments.
   - A movement is never edited or deleted on its own: cancelling ("anular") sets `anuladoEn`, so it stops counting but stays in the history.
@@ -90,7 +90,7 @@ Products with stock but no cost are left out of the total and counted, so the UI
 
 ### Stock
 - Products table with current stock, highlighting low and out-of-stock ones, and the total stock value above it (shown once some product has a cost).
-- Optional cost per product. Editing a product warns, without blocking the save, when the cost is over the sale price. The product page shows cost, profit and margin (in red when it's a loss) and the stock value.
+- Required sale price per product (see the data model for older products without one). Optional cost per product. Editing a product warns, without blocking the save, when the cost is over the sale price. The product page shows cost, profit and margin (in red when it's a loss) and the stock value.
 - Keyboard-first movement entry: product (type to pick), quantity, Enter. Warns before stock would go negative.
 - Alerts panel and a low-stock counter badge in the navigation.
 - Per-product movement history, with cancelling.

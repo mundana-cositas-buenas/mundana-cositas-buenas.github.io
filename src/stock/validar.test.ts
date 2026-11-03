@@ -4,10 +4,23 @@ import { avisosProducto, productoFormDesde, productoVacio, validarMovimiento, va
 
 describe('validarProducto', () => {
   it('fills defaults for empty optional fields', () => {
-    expect(validarProducto({ ...productoVacio(), nombre: ' Vino ' })).toEqual({
+    expect(validarProducto({ ...productoVacio(), nombre: ' Vino ', precioVenta: '1500' })).toEqual({
       ok: true,
-      datos: { nombre: 'Vino', unidad: 'u', stockMinimo: 0, activo: true },
+      datos: { nombre: 'Vino', unidad: 'u', stockMinimo: 0, precioVenta: 150000, activo: true },
     });
+  });
+
+  it('requires a sale price, zero included', () => {
+    expect(validarProducto({ ...productoVacio(), nombre: 'Vino' })).toEqual({ ok: false, errores: { precioVenta: 'Requerido' } });
+    expect(validarProducto({ ...productoVacio(), nombre: 'Vino', precioVenta: '  ' })).toEqual({ ok: false, errores: { precioVenta: 'Requerido' } });
+    expect(validarProducto({ ...productoVacio(), nombre: 'Vino', precioVenta: '-1' })).toMatchObject({ ok: false, errores: { precioVenta: expect.any(String) } });
+    expect(validarProducto({ ...productoVacio(), nombre: 'Vino', precioVenta: '0' })).toMatchObject({ ok: true, datos: { precioVenta: 0 } });
+  });
+
+  it('asks an old product without a price for one when edited', () => {
+    const viejo: Producto = { id: 'p', actualizadoEn: '', nombre: 'Miel', unidad: 'u', stockMinimo: 0, activo: true };
+    expect(productoFormDesde(viejo).precioVenta).toBe('');
+    expect(validarProducto(productoFormDesde(viejo))).toEqual({ ok: false, errores: { precioVenta: 'Requerido' } });
   });
 
   it('round-trips through the form', () => {
@@ -29,23 +42,24 @@ describe('validarProducto', () => {
   it('reports every field error, including duplicate names', () => {
     const r = validarProducto({ ...productoVacio(), stockMinimo: '-1', costo: '-5', precioVenta: 'x' });
     expect(!r.ok && Object.keys(r.errores).sort()).toEqual(['costo', 'nombre', 'precioVenta', 'stockMinimo']);
-    expect(validarProducto({ ...productoVacio(), nombre: 'Vino', costo: 'mucho' })).toMatchObject({ ok: false, errores: { costo: expect.any(String) } });
-    expect(validarProducto({ ...productoVacio(), nombre: 'vino' }, ['Vino'])).toMatchObject({
+    expect(validarProducto({ ...productoVacio(), nombre: 'Vino', costo: 'mucho', precioVenta: '1' })).toMatchObject({ ok: false, errores: { costo: expect.any(String) } });
+    expect(validarProducto({ ...productoVacio(), nombre: 'vino', precioVenta: '1' }, ['Vino'])).toMatchObject({
       ok: false,
       errores: { nombre: expect.any(String) },
     });
   });
 
   it('takes an optional cost, zero included', () => {
-    expect(validarProducto({ ...productoVacio(), nombre: 'Vino', costo: '0' })).toMatchObject({ ok: true, datos: { costo: 0 } });
-    expect(validarProducto({ ...productoVacio(), nombre: 'Vino', costo: '1.250,50' })).toMatchObject({ ok: true, datos: { costo: 125050 } });
-    const sinCosto = validarProducto({ ...productoVacio(), nombre: 'Vino', costo: '  ' });
+    const vino = { ...productoVacio(), nombre: 'Vino', precioVenta: '2000' };
+    expect(validarProducto({ ...vino, costo: '0' })).toMatchObject({ ok: true, datos: { costo: 0 } });
+    expect(validarProducto({ ...vino, costo: '1.250,50' })).toMatchObject({ ok: true, datos: { costo: 125050 } });
+    const sinCosto = validarProducto({ ...vino, costo: '  ' });
     expect(sinCosto.ok && 'costo' in sinCosto.datos).toBe(false);
   });
 });
 
 describe('avisosProducto', () => {
-  const datos = { nombre: 'Vino', unidad: 'u', stockMinimo: 0, activo: true };
+  const datos = { nombre: 'Vino', unidad: 'u', stockMinimo: 0, precioVenta: 1000, activo: true };
 
   it('warns when the cost is over the sale price, without blocking the save', () => {
     const v = validarProducto({ ...productoVacio(), nombre: 'Vino', costo: '1500', precioVenta: '1000' });
@@ -53,11 +67,10 @@ describe('avisosProducto', () => {
     expect(v.ok && avisosProducto(v.datos)).toEqual({ costo: expect.any(String) });
   });
 
-  it('says nothing at break-even, with a profit, or with a price or cost missing', () => {
-    expect(avisosProducto({ ...datos, costo: 1000, precioVenta: 1000 })).toEqual({});
-    expect(avisosProducto({ ...datos, costo: 1000, precioVenta: 1500 })).toEqual({});
+  it('says nothing at break-even, with a profit, or with the cost missing', () => {
     expect(avisosProducto({ ...datos, costo: 1000 })).toEqual({});
-    expect(avisosProducto({ ...datos, precioVenta: 1000 })).toEqual({});
+    expect(avisosProducto({ ...datos, costo: 1000, precioVenta: 1500 })).toEqual({});
+    expect(avisosProducto(datos)).toEqual({});
   });
 });
 

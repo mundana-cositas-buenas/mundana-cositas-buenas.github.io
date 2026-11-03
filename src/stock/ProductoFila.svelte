@@ -119,7 +119,7 @@
       class="num"
       inputmode="decimal"
       bind:value={form.precioVenta}
-      placeholder="$ (opcional)"
+      placeholder="$"
       aria-label="Precio de venta"
       aria-invalid={!!errores.precioVenta}
       title={errores.precioVenta}

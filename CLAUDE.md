@@ -52,6 +52,7 @@ npm scripts: `check` = `svelte-check --fail-on-warnings` (app, `tsconfig.json`) 
 - Money is stored as integer cents; format only on display.
 - Recipe cost is **never stored** — always computed, so ingredient price changes propagate.
 - Current stock is **never stored as an editable number** — it is the sum of `movimientos` (entrada +, venta −, ajuste signed). Movements are never edited; "anular" sets `anuladoEn` and the movement stops counting but stays in the history.
+- A product's `precioVenta` is required by `validarProducto` (zero allowed) but stays optional in `Producto` and the backup schema: older records may lack it and are shown as "Sin precio". Code reading it must handle `undefined`.
 - Stock alert = active product with stock ≤ `stockMinimo` (bajo) or ≤ 0 (agotado); see `src/stock/logic.ts`.
 - Unit conversions only within a family (mass g/kg, volume ml/l, count u); mixing families is an error shown on the line.
 - Price history (`historialPrecios`) is appended by `guardarInsumo` in the same transaction, only when the cost per base unit changes; never write `insumos` with a bare `db.put`, and deleting an ingredient deletes its history.

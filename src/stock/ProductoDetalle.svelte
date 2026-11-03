@@ -45,10 +45,8 @@
       <dt>Costo</dt>
       <dd>{formatPesos(producto.costo)}</dd>
     {/if}
-    {#if producto.precioVenta !== undefined}
-      <dt>Precio de venta</dt>
-      <dd>{formatPesos(producto.precioVenta)}</dd>
-    {/if}
+    <dt>Precio de venta</dt>
+    <dd>{#if producto.precioVenta === undefined}<span class="aviso">Sin precio</span>{:else}{formatPesos(producto.precioVenta)}{/if}</dd>
     {#if renta}
       <dt>Ganancia</dt>
       <dd class:error={renta.ganancia < 0}>{formatPesos(renta.ganancia)}</dd>

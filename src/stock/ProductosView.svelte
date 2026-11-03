@@ -49,7 +49,7 @@
   }
 
   async function actualizar(orig: Producto, datos: DatosProducto) {
-    // Replace, not merge: an emptied cost or sale price must disappear.
+    // Replace, not merge: an emptied cost must disappear.
     const p = await guardarProducto(db, { ...datos, id: orig.id, actualizadoEn: orig.actualizadoEn });
     productos = productos.map((x) => (x.id === p.id ? p : x)).sort(porNombre);
     terminarEdicion(p.id);
@@ -129,7 +129,9 @@
           </td>
           <td class="num">{formatNumero(p.stockMinimo)}</td>
           <td class="num">{p.costo === undefined ? '' : formatPesos(p.costo)}</td>
-          <td class="num">{p.precioVenta === undefined ? '' : formatPesos(p.precioVenta)}</td>
+          <td class="num">
+            {#if p.precioVenta === undefined}<span class="aviso">Sin precio</span>{:else}{formatPesos(p.precioVenta)}{/if}
+          </td>
           <td>{p.activo ? 'sí' : 'no'}</td>
           <td class="acciones">
             <button type="button" class="secundario" data-editar={p.id} onclick={() => (editando = p.id)}>Editar</button>

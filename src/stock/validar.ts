@@ -1,7 +1,7 @@
 // Parsing and validation of user-typed stock forms (strings) into records.
 
 import { leerNumero, leerPesos, nombreRepetido, numeroEditable, type Errores, type Validado } from '../lib/campos';
-import { pesosEditable } from '../lib/money';
+import { pesosEditable, type Centavos } from '../lib/money';
 import { rentabilidad } from './logic';
 import type { Movimiento, Producto, TipoMovimiento } from './types';
 
@@ -23,7 +23,8 @@ export const ETIQUETAS_PRODUCTO: Record<keyof ProductoForm, string> = {
   activo: 'Activo',
 };
 
-export type DatosProducto = Omit<Producto, 'id' | 'actualizadoEn'>;
+// Old products may lack a sale price, but every save sets one.
+export type DatosProducto = Omit<Producto, 'id' | 'actualizadoEn' | 'precioVenta'> & { precioVenta: Centavos };
 
 export const productoVacio = (): ProductoForm => ({ nombre: '', unidad: '', stockMinimo: '', costo: '', precioVenta: '', activo: true });
 
@@ -38,7 +39,7 @@ export function productoFormDesde(p: Producto): ProductoForm {
   };
 }
 
-/** Empty unit means "u", empty minimum means 0, empty cost or price means none. */
+/** Empty unit means "u", empty minimum means 0, empty cost means none; the sale price is required (zero allowed). */
 export function validarProducto(f: ProductoForm, otrosNombres: readonly string[] = []): Validado<DatosProducto, ProductoForm> {
   const errores: Errores<ProductoForm> = {};
   const nombre = f.nombre.trim();
@@ -48,12 +49,11 @@ export function validarProducto(f: ProductoForm, otrosNombres: readonly string[]
   if (!minimo.ok) errores.stockMinimo = minimo.error;
   const costo = f.costo.trim() ? leerPesos(f.costo) : undefined;
   if (costo && !costo.ok) errores.costo = costo.error;
-  const precio = f.precioVenta.trim() ? leerPesos(f.precioVenta) : undefined;
-  if (precio && !precio.ok) errores.precioVenta = precio.error;
-  if (Object.keys(errores).length || !minimo.ok || (costo && !costo.ok) || (precio && !precio.ok)) return { ok: false, errores };
-  const datos: DatosProducto = { nombre, unidad: f.unidad.trim() || 'u', stockMinimo: minimo.valor, activo: f.activo };
+  const precio = leerPesos(f.precioVenta);
+  if (!precio.ok) errores.precioVenta = precio.error;
+  if (Object.keys(errores).length || !minimo.ok || (costo && !costo.ok) || !precio.ok) return { ok: false, errores };
+  const datos: DatosProducto = { nombre, unidad: f.unidad.trim() || 'u', stockMinimo: minimo.valor, precioVenta: precio.valor, activo: f.activo };
   if (costo) datos.costo = costo.valor;
-  if (precio) datos.precioVenta = precio.valor;
   return { ok: true, datos };
 }
 
