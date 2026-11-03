@@ -122,6 +122,7 @@ día         = sales grouped by local calendar day; voided sales are listed but 
   `{ formato: 'mundana-backup', version, exportadoEn, datos: { <every data store> } }`.
   `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales.
 - **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale); a movement with a `ventaId` must be a `venta` with a `precioUnitario`. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
+- The backup page ends with the running release (`package.json` `version`, set by `release.py`), to tell which version is deployed.
 - The date of the last backup is kept, and the app warns when there is data and no backup in more than **7 days**.
 - **CSV** exports of products (with cost, profit, margin and stock value), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
 - The app asks for persistent storage (`navigator.storage.persist()`) at startup and again when installed, and says so if the browser doesn't grant it.

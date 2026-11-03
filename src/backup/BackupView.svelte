@@ -203,3 +203,5 @@
   <button type="button" class="secundario" onclick={() => exportarCsv('insumos', csvDeInsumos)} disabled={ocupado}>Insumos</button>
   <button type="button" class="secundario" onclick={() => exportarCsv('recetas', csvDeRecetas)} disabled={ocupado}>Recetas</button>
 </div>
+
+<p class="muted">Versión {__MUNDANA_VERSION__}</p>

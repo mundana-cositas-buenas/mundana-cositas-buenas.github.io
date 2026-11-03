@@ -47,6 +47,13 @@ describe('dist/', () => {
     expect(sw).toMatch(/"[0-9a-f]{8}"/);
   });
 
+  it('embeds the release version from package.json in the app', () => {
+    const { version } = JSON.parse(readFileSync(join(raiz, 'package.json'), 'utf8')) as { version: string };
+    const js = archivos.filter((f) => f.endsWith('.js') && f !== 'sw.js').map(leer).join('\n');
+    expect(js).not.toContain('__MUNDANA_VERSION__');
+    expect(js).toContain(`Versión ${version}`);
+  });
+
   it('loads the app script and stylesheet from the build', () => {
     const html = leer('index.html');
     for (const [, src] of html.matchAll(/(?:src|href)="\/([^"]+)"/g)) expect(archivos, src).toContain(src);

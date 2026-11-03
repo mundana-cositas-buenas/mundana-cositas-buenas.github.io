@@ -6,6 +6,8 @@ import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { listaPrecache, versionBuild } from './src/pwa/logic.ts';
 
+const PAQUETE = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+
 const SW = fileURLToPath(new URL('./src/pwa/sw.ts', import.meta.url));
 
 const archivosDe = (dir: string): string[] =>
@@ -55,6 +57,8 @@ function precache(): Plugin {
 // Organization Pages site (mundana-cositas-buenas.github.io): served at the domain root.
 export default defineConfig({
   base: '/',
+  // The release (package.json `version`, set by release.py), shown on the backup page.
+  define: { __MUNDANA_VERSION__: JSON.stringify(PAQUETE.version) },
   plugins: [svelte(), precache()],
   test: {
     environment: 'node',
