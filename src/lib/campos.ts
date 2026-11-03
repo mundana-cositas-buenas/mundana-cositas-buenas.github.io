@@ -11,6 +11,7 @@ export type Validado<T, F> = { ok: true; datos: T } | { ok: false; errores: Erro
 
 interface Rango {
   min?: number; // inclusive
+  max?: number; // inclusive
   mayorQue?: number; // exclusive
   menorQue?: number; // exclusive
 }
@@ -26,6 +27,7 @@ export function leerNumero(texto: string, r: Rango = {}): Resultado {
   const piso = r.min ?? r.mayorQue;
   if (n < 0 && piso !== undefined && piso >= 0) return { ok: false, error: 'No puede ser negativo' };
   if (r.min !== undefined && n < r.min) return { ok: false, error: `Mínimo ${formatNumero(r.min)}` };
+  if (r.max !== undefined && n > r.max) return { ok: false, error: `Máximo ${formatNumero(r.max)}` };
   if (r.mayorQue !== undefined && n <= r.mayorQue) return { ok: false, error: `Debe ser mayor que ${formatNumero(r.mayorQue)}` };
   if (r.menorQue !== undefined && n >= r.menorQue) return { ok: false, error: `Debe ser menor que ${formatNumero(r.menorQue)}` };
   return { ok: true, valor: n };

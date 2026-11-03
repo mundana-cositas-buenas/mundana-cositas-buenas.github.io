@@ -2,17 +2,18 @@
 
 import type { Insumo, PrecioHistorico, Receta, RecetaLinea } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
-import type { Movimiento, Producto } from '../stock/types';
+import type { Movimiento, Producto, Venta } from '../stock/types';
 import { idbRequest as req, type DB, type Registro, type StoreName } from './db';
 import { esUnidad, esUnidadBase } from './units';
 
 export const FORMATO = 'mundana-backup';
 // Bump when the shape of the records changes, and teach leerBackup to upgrade older files.
 // 2: adds historialPrecios (v1 files are read with an empty history).
-export const VERSION = 2;
+// 3: adds ventas, and ventaId/precioUnitario on sale movements (older files are read with no sales).
+export const VERSION = 3;
 
 /** Data stores, in dependency order. `meta` (e.g. the last backup date) is not exported. */
-export const STORES = ['insumos', 'historialPrecios', 'recetas', 'recetaLineas', 'productos', 'movimientos'] as const;
+export const STORES = ['insumos', 'historialPrecios', 'recetas', 'recetaLineas', 'productos', 'ventas', 'movimientos'] as const;
 export type StoreDatos = (typeof STORES)[number];
 
 export const NOMBRES: Record<StoreDatos, string> = {
@@ -21,6 +22,7 @@ export const NOMBRES: Record<StoreDatos, string> = {
   recetas: 'Recetas',
   recetaLineas: 'Líneas de receta',
   productos: 'Productos',
+  ventas: 'Ventas',
   movimientos: 'Movimientos de stock',
 };
 
@@ -30,6 +32,7 @@ export interface Datos {
   recetas: Receta[];
   recetaLineas: RecetaLinea[];
   productos: Producto[];
+  ventas: Venta[];
   movimientos: Movimiento[];
 }
 
@@ -143,6 +146,7 @@ const positivo: Chequeo = (v) => numero(v) && (v as number) > 0;
 const centavos: Chequeo = (v) => Number.isInteger(v) && (v as number) >= 0;
 const booleano: Chequeo = (v) => typeof v === 'boolean';
 const fecha: Chequeo = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v));
+const porcentaje: Chequeo = (v) => noNegativo(v) && (v as number) <= 100;
 const merma: Chequeo = (v) => noNegativo(v) && (v as number) < 100;
 const opcional =
   (c: Chequeo): Chequeo =>
@@ -180,16 +184,23 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
       return 'tipo de línea desconocido';
     case 'productos':
       return { ...REGISTRO, nombre: texto, unidad: texto, stockMinimo: noNegativo, costo: opcional(centavos), precioVenta: opcional(centavos), activo: booleano };
-    case 'movimientos':
+    case 'ventas':
+      return { ...REGISTRO, fecha, descuentoPct: porcentaje, nota: opcional(texto), anuladoEn: opcional(fecha) };
+    case 'movimientos': {
+      // A sale line (with ventaId) must be a 'venta' and carry its unit price.
+      const deVenta = r.ventaId !== undefined;
       return {
         ...REGISTRO,
         productoId: noVacio,
-        tipo: unoDe('entrada', 'venta', 'ajuste'),
+        tipo: deVenta ? unoDe('venta') : unoDe('entrada', 'venta', 'ajuste'),
         cantidad: r.tipo === 'ajuste' ? numero : positivo,
         fecha,
         nota: opcional(texto),
         anuladoEn: opcional(fecha),
+        ventaId: opcional(noVacio),
+        precioUnitario: deVenta ? centavos : opcional(centavos),
       };
+    }
   }
 }
 
@@ -222,6 +233,7 @@ export function leerBackup(contenido: string): Lectura {
   const datos = json.datos;
   if (!esObjeto(datos)) return { ok: false, errores: [...errores, 'Faltan los datos.'] };
   if (v === 1 && datos.historialPrecios === undefined) datos.historialPrecios = [];
+  if ((v as number) < 3 && datos.ventas === undefined) datos.ventas = [];
 
   const ids = {} as Record<StoreDatos, Set<string>>;
   for (const s of STORES) {
@@ -260,6 +272,7 @@ export function leerBackup(contenido: string): Lectura {
   ref('recetaLineas', 'recetaId', 'recetas');
   ref('recetaLineas', 'insumoId', 'insumos');
   ref('movimientos', 'productoId', 'productos');
+  ref('movimientos', 'ventaId', 'ventas');
 
   if (errores.length) {
     const extra = errores.length - MAX_ERRORES;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buscarPorNombre, coincide, formatFechaHora, normalizar } from './texto';
+import { buscarPorNombre, coincide, diaLocal, formatFecha, formatFechaHora, formatHora, normalizar } from './texto';
 
 describe('texto', () => {
   it('normalizes case and accents', () => {
@@ -34,5 +34,17 @@ describe('buscarPorNombre', () => {
     expect(buscarPorNombre(ps, 'vino')).toBeUndefined();
     expect(buscarPorNombre(ps, 'miel')).toBeUndefined();
     expect(buscarPorNombre(ps, ' ')).toBeUndefined();
+  });
+});
+
+describe('formatFecha / formatHora / diaLocal', () => {
+  it('use the local date and time', () => {
+    const iso = new Date(2026, 2, 5, 9, 7).toISOString();
+    expect(formatFecha(iso)).toBe('05/03/2026');
+    expect(formatHora(iso)).toBe('09:07');
+    expect(diaLocal(iso)).toBe('2026-03-05');
+    expect(diaLocal(new Date(2026, 2, 5, 23, 59).toISOString())).toBe('2026-03-05');
+    expect(formatFecha('x')).toBe('—');
+    expect(formatHora('x')).toBe('—');
   });
 });

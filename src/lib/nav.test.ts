@@ -8,9 +8,10 @@ describe('seccionDesdeHash', () => {
     expect(seccionDesdeHash('#/costos/receta/123')).toBe('costos');
   });
 
-  it('defaults to costos', () => {
-    expect(seccionDesdeHash('')).toBe('costos');
-    expect(seccionDesdeHash('#/nada')).toBe('costos');
+  it('defaults to ventas, the home page', () => {
+    expect(seccionDesdeHash('')).toBe('ventas');
+    expect(seccionDesdeHash('#/nada')).toBe('ventas');
+    expect(seccionDesdeHash('#/ventas')).toBe('ventas');
   });
 });
 

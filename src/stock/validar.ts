@@ -3,7 +3,7 @@
 import { leerNumero, leerPesos, nombreRepetido, numeroEditable, type Errores, type Validado } from '../lib/campos';
 import { pesosEditable, type Centavos } from '../lib/money';
 import { rentabilidad } from './logic';
-import type { Movimiento, Producto, TipoMovimiento } from './types';
+import type { Movimiento, Producto, TipoMovimiento, Venta } from './types';
 
 export interface ProductoForm {
   nombre: string;
@@ -69,6 +69,9 @@ export const TIPOS: readonly { id: TipoMovimiento; titulo: string }[] = [
   { id: 'ajuste', titulo: 'Ajuste' },
 ];
 
+/** Types in the quick movement form: sales are entered as a Venta. */
+export const TIPOS_RAPIDOS = TIPOS.filter((t) => t.id !== 'venta');
+
 export interface MovimientoForm {
   tipo: TipoMovimiento;
   cantidad: string;
@@ -83,6 +86,28 @@ export function validarMovimiento(f: MovimientoForm): Validado<DatosMovimiento, 
   if (!c.ok) return { ok: false, errores: { cantidad: c.error } };
   if (c.valor === 0) return { ok: false, errores: { cantidad: 'No puede ser cero' } };
   const datos: DatosMovimiento = { tipo: f.tipo, cantidad: c.valor };
+  const nota = f.nota.trim();
+  if (nota) datos.nota = nota;
+  return { ok: true, datos };
+}
+
+export interface VentaForm {
+  descuento: string; // %
+  nota: string;
+}
+
+export const ETIQUETAS_VENTA: Record<keyof VentaForm, string> = {
+  descuento: 'Descuento',
+  nota: 'Nota',
+};
+
+export type DatosVenta = Pick<Venta, 'descuentoPct' | 'nota'>;
+
+/** Empty discount means 0 %; otherwise 0 to 100, decimals allowed. */
+export function validarVenta(f: VentaForm): Validado<DatosVenta, VentaForm> {
+  const d = leerNumero(f.descuento.trim() || '0', { min: 0, max: 100 });
+  if (!d.ok) return { ok: false, errores: { descuento: d.error } };
+  const datos: DatosVenta = { descuentoPct: d.valor };
   const nota = f.nota.trim();
   if (nota) datos.nota = nota;
   return { ok: true, datos };

@@ -4,13 +4,14 @@
 export type Atajo = { tipo: 'ir'; hash: string } | { tipo: 'foco'; objetivo: 'buscar' | 'nuevo' } | { tipo: 'ayuda' };
 
 export const ATAJOS: readonly { tecla: string; descripcion: string; atajo: Atajo }[] = [
+  { tecla: 'v', descripcion: 'Ir a Ventas (inicio)', atajo: { tipo: 'ir', hash: '#/ventas' } },
   { tecla: 'r', descripcion: 'Ir a Recetas', atajo: { tipo: 'ir', hash: '#/costos' } },
   { tecla: 'i', descripcion: 'Ir a Insumos', atajo: { tipo: 'ir', hash: '#/costos/insumos' } },
   { tecla: 'p', descripcion: 'Ir a Productos', atajo: { tipo: 'ir', hash: '#/stock' } },
-  { tecla: 'm', descripcion: 'Ir a Movimientos (registrar venta, entrada o ajuste)', atajo: { tipo: 'ir', hash: '#/stock/movimientos' } },
+  { tecla: 'm', descripcion: 'Ir a Movimientos (registrar entrada o ajuste)', atajo: { tipo: 'ir', hash: '#/stock/movimientos' } },
   { tecla: 'a', descripcion: 'Ir a Alertas de stock', atajo: { tipo: 'ir', hash: '#/stock/alertas' } },
   { tecla: 'b', descripcion: 'Ir a Backup', atajo: { tipo: 'ir', hash: '#/backup' } },
-  { tecla: 'n', descripcion: 'Nuevo: insumo, producto, receta, línea de receta o movimiento', atajo: { tipo: 'foco', objetivo: 'nuevo' } },
+  { tecla: 'n', descripcion: 'Nuevo: producto de la venta, insumo, producto, receta, línea de receta o movimiento', atajo: { tipo: 'foco', objetivo: 'nuevo' } },
   { tecla: '/', descripcion: 'Buscar en la lista', atajo: { tipo: 'foco', objetivo: 'buscar' } },
   { tecla: '?', descripcion: 'Mostrar u ocultar esta ayuda', atajo: { tipo: 'ayuda' } },
 ];

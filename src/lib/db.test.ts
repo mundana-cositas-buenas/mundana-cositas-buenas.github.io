@@ -25,10 +25,25 @@ describe('openDB', () => {
     const db = await fresh();
     expect(db.version).toBe(DB_VERSION);
     expect([...db.idb.objectStoreNames].sort()).toEqual(
-      ['historialPrecios', 'insumos', 'meta', 'movimientos', 'productos', 'recetaLineas', 'recetas'].sort(),
+      ['historialPrecios', 'insumos', 'meta', 'movimientos', 'productos', 'recetaLineas', 'recetas', 'ventas'].sort(),
     );
     const lineas = db.idb.transaction('recetaLineas').objectStore('recetaLineas');
     expect([...lineas.indexNames].sort()).toEqual(['insumoId', 'recetaId']);
+    const movs = db.idb.transaction('movimientos').objectStore('movimientos');
+    expect([...movs.indexNames].sort()).toEqual(['productoId', 'ventaId']);
+  });
+
+  it('v4 adds sales and keeps the existing movements', async () => {
+    const name = `v4-${n++}`;
+    const viejo = await openDB(name, MIGRATIONS.slice(0, 3));
+    await viejo.put('movimientos', { id: 'm1', actualizadoEn: '', productoId: 'p1', tipo: 'venta', cantidad: 1, fecha: '' });
+    viejo.close();
+    const db = await openDB(name);
+    open.push(db);
+    expect(db.idb.objectStoreNames.contains('ventas')).toBe(true);
+    expect((await db.list('movimientos')).map((m) => m.id)).toEqual(['m1']);
+    // Movements without a sale are left out of the ventaId index.
+    expect(await db.listBy('movimientos', 'ventaId', 'v1')).toEqual([]);
   });
 
   it('runs only the pending migrations when upgrading', async () => {

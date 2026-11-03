@@ -12,6 +12,13 @@ export interface Campo {
 export class Ediciones {
   #antes = new Map<Campo, string>();
   #tocados = new Set<Campo>();
+  #otras = new Set<string>();
+
+  /** Pending work kept outside the fields (e.g. the lines of a sale not registered yet), by name. */
+  marcar(clave: string, pendiente: boolean) {
+    if (pendiente) this.#otras.add(clave);
+    else this.#otras.delete(clave);
+  }
 
   /** Field got focus: snapshot its value unless it already has pending edits. */
   foco(c: Campo) {
@@ -24,8 +31,9 @@ export class Ediciones {
     this.#tocados.add(c);
   }
 
-  /** True if some field still on screen differs from its value before the user touched it. */
+  /** True if work was marked pending, or some field still on screen differs from its value before the user touched it. */
   pendientes(): boolean {
+    if (this.#otras.size) return true;
     for (const c of this.#tocados) {
       if (c.isConnected && c.value !== this.#antes.get(c)) return true;
       this.#tocados.delete(c);

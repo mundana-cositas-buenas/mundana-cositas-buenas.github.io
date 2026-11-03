@@ -1,9 +1,3 @@
-* agregar movimiento de stock como una venta de varios productos
-  * ejemplo, ahora si una venta lleva varias cosas hay que agregar por producto
-  * la idea sería que dentro de una misma venta se agreguen varios productos
-  * la venta debería mostrar el monto total a pagar
-  * con la posibilidad de agregar descuentos (por venta) en porcentaje
-* habría que tener una vista inicial (homepage) con la info de las ventas nada más (por día)
 * podríamos tener una opción de promos??
   * debería descontar de los productos ya cargados/existentes
   * por ejemplo tengo jugos y ensaladas como productos

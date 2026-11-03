@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Producto } from './types';
-import { avisosProducto, productoFormDesde, productoVacio, validarMovimiento, validarProducto, type MovimientoForm } from './validar';
+import { avisosProducto, productoFormDesde, productoVacio, TIPOS_RAPIDOS, validarMovimiento, validarProducto, validarVenta, type MovimientoForm } from './validar';
 
 describe('validarProducto', () => {
   it('fills defaults for empty optional fields', () => {
@@ -88,5 +88,20 @@ describe('validarMovimiento', () => {
   it('takes a signed, non-zero quantity for adjustments', () => {
     expect(validarMovimiento(f('ajuste', '-3'))).toEqual({ ok: true, datos: { tipo: 'ajuste', cantidad: -3 } });
     expect(validarMovimiento(f('ajuste', '0'))).toMatchObject({ ok: false, errores: { cantidad: 'No puede ser cero' } });
+  });
+});
+
+describe('validarVenta', () => {
+  it('takes an optional discount from 0 to 100 %, with decimals', () => {
+    expect(validarVenta({ descuento: '', nota: '' })).toEqual({ ok: true, datos: { descuentoPct: 0 } });
+    expect(validarVenta({ descuento: '12,5', nota: ' feria ' })).toEqual({ ok: true, datos: { descuentoPct: 12.5, nota: 'feria' } });
+    expect(validarVenta({ descuento: '100', nota: '' }).ok).toBe(true);
+    expect(validarVenta({ descuento: '100,5', nota: '' })).toEqual({ ok: false, errores: { descuento: 'Máximo 100' } });
+    expect(validarVenta({ descuento: '-5', nota: '' })).toEqual({ ok: false, errores: { descuento: 'No puede ser negativo' } });
+    expect(validarVenta({ descuento: 'diez', nota: '' }).ok).toBe(false);
+  });
+
+  it('leaves sales out of the quick movement form', () => {
+    expect(TIPOS_RAPIDOS.map((t) => t.id)).toEqual(['entrada', 'ajuste']);
   });
 });

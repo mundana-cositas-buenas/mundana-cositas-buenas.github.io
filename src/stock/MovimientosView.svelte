@@ -51,6 +51,7 @@
   <p class="muted">Todavía no hay productos activos. <a href="#/stock">Cargá los productos</a> para registrar movimientos.</p>
 {:else}
   <MovimientoRapido {db} {productos} {stock} onregistrado={registrado} />
+  <p class="muted">Las ventas se registran en <a href="#/ventas">Ventas</a>.</p>
 {/if}
 
 <h2>Últimos movimientos</h2>

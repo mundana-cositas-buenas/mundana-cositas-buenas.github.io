@@ -6,7 +6,7 @@
   import { coincide } from '../lib/texto';
   import { nivel, valorInventario } from './logic';
   import ProductoFila from './ProductoFila.svelte';
-  import { borrarProducto, contarMovimientos, guardarProducto, listarProductos, stockActualDe } from './repo';
+  import { borrarProducto, contarMovimientos, guardarProducto, listarProductos, ProductoEnVentas, stockActualDe, ventasConProducto } from './repo';
   import type { Producto } from './types';
   import type { DatosProducto } from './validar';
 
@@ -57,6 +57,11 @@
   }
 
   async function borrar(p: Producto) {
+    const ventas = await ventasConProducto(db, p.id);
+    if (ventas) {
+      mensaje = new ProductoEnVentas(ventas).message;
+      return;
+    }
     const n = await contarMovimientos(db, p.id);
     const aviso = n
       ? `"${p.nombre}" tiene ${n} ${n === 1 ? 'movimiento' : 'movimientos'}, que se van a borrar también.\n` +
@@ -68,7 +73,7 @@
       productos = productos.filter((x) => x.id !== p.id);
       mensaje = '';
     } catch (e) {
-      mensaje = String(e);
+      mensaje = e instanceof Error ? e.message : String(e);
     }
   }
 </script>

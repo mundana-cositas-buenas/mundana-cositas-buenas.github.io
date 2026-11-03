@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Insumo, LineaCostoFijo, LineaInsumo, PrecioHistorico, Receta } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
-import type { Movimiento, Producto } from '../stock/types';
+import type { Movimiento, Producto, Venta } from '../stock/types';
 import {
   backupVencido,
   cambiosBackup,
@@ -66,7 +66,9 @@ const movs: Movimiento[] = [
   { id: 'm1', actualizadoEn: T, productoId: 'p1', tipo: 'entrada', cantidad: 10, fecha: T },
   { id: 'm2', actualizadoEn: T, productoId: 'p1', tipo: 'venta', cantidad: 3, fecha: T, nota: 'feria', anuladoEn: T },
   { id: 'm3', actualizadoEn: T, productoId: 'p1', tipo: 'ajuste', cantidad: -1.5, fecha: T },
+  { id: 'm4', actualizadoEn: T, productoId: 'p1', tipo: 'venta', cantidad: 2, fecha: T, ventaId: 'v1', precioUnitario: 150000 },
 ];
+const venta: Venta = { id: 'v1', actualizadoEn: T, fecha: T, descuentoPct: 10, nota: 'mostrador' };
 
 const backup = (): Backup => ({
   formato: FORMATO,
@@ -78,6 +80,7 @@ const backup = (): Backup => ({
     recetas: [structuredClone(receta)],
     recetaLineas: [structuredClone(lineaInsumo), structuredClone(lineaFija)],
     productos: [structuredClone(producto)],
+    ventas: [structuredClone(venta)],
     movimientos: structuredClone(movs),
   },
 });
@@ -105,7 +108,7 @@ describe('exportar / importar', () => {
     const antes = await exportar(db, new Date(T));
 
     const texto = serializar(antes);
-    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], movimientos: [] } });
+    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], ventas: [], movimientos: [] } });
     expect(Object.values(await contar(db)).every((c) => c === 0)).toBe(true);
 
     const r = leerBackup(texto);
@@ -125,7 +128,7 @@ describe('exportar / importar', () => {
     expect(b.version).toBe(VERSION);
     expect(b.exportadoEn).toBe(T);
     expect(Object.keys(b.datos).sort()).toEqual([...STORES].sort());
-    expect(contarBackup(b)).toEqual({ insumos: 1, historialPrecios: 1, recetas: 1, recetaLineas: 2, productos: 1, movimientos: 3 });
+    expect(contarBackup(b)).toEqual({ insumos: 1, historialPrecios: 1, recetas: 1, recetaLineas: 2, productos: 1, ventas: 1, movimientos: 4 });
     expect(await contar(db)).toEqual(contarBackup(b));
   });
 
@@ -233,24 +236,66 @@ describe('leerBackup', () => {
 
   it('rejects repeated ids and dangling references', () => {
     expect(errores(json((b) => b.datos.movimientos.push(b.datos.movimientos[0])))).toEqual([
-      'Movimientos de stock, registro 4: id repetido (m1).',
+      'Movimientos de stock, registro 5: id repetido (m1).',
     ]);
     expect(errores(json((b) => (b.datos.recetaLineas[0].insumoId = 'nada')))).toEqual([
       'Líneas de receta, registro 1: "insumoId" apunta a un registro que no está en el backup.',
     ]);
-    expect(errores(json((b) => (b.datos.productos = [])))).toHaveLength(3);
+    expect(errores(json((b) => (b.datos.productos = [])))).toHaveLength(4);
+    expect(errores(json((b) => (b.datos.ventas = [])))).toEqual([
+      'Movimientos de stock, registro 4: "ventaId" apunta a un registro que no está en el backup.',
+    ]);
   });
 
-  it('upgrades version 1 files, which had no price history', () => {
+  it('upgrades version 1 files, which had no price history nor sales', () => {
+    const sinVentas = (b: Record<string, any>) => {
+      delete b.datos.ventas;
+      b.datos.movimientos = b.datos.movimientos.filter((m: Movimiento) => !m.ventaId);
+    };
     const r = leerBackup(
       json((b) => {
         b.version = 1;
         delete b.datos.historialPrecios;
+        sinVentas(b);
       }),
     );
-    expect(r).toEqual({ ok: true, backup: { ...backup(), datos: { ...backup().datos, historialPrecios: [] } } });
+    const esperado = backup();
+    esperado.datos.historialPrecios = [];
+    esperado.datos.ventas = [];
+    esperado.datos.movimientos = esperado.datos.movimientos.filter((m) => !m.ventaId);
+    expect(r).toEqual({ ok: true, backup: esperado });
     // From version 2 on the list is required.
     expect(errores(json((b) => delete b.datos.historialPrecios))).toEqual(['Historial de precios: falta la lista.']);
+  });
+
+  it('upgrades version 2 files, which had no sales', () => {
+    const r = leerBackup(
+      json((b) => {
+        b.version = 2;
+        delete b.datos.ventas;
+        b.datos.movimientos = b.datos.movimientos.filter((m: Movimiento) => !m.ventaId);
+      }),
+    );
+    expect(r.ok && r.backup.version).toBe(VERSION);
+    expect(r.ok && r.backup.datos.ventas).toEqual([]);
+    // From version 3 on the list is required.
+    expect(errores(json((b) => delete b.datos.ventas))).toContain('Ventas: falta la lista.');
+  });
+
+  it('checks sales and their lines', () => {
+    expect(errores(json((b) => (b.datos.ventas[0].descuentoPct = 101)))).toEqual([
+      'Ventas, registro 1: "descuentoPct" falta o es inválido.',
+    ]);
+    expect(errores(json((b) => delete b.datos.ventas[0].nota))).toEqual([]);
+    expect(errores(json((b) => (b.datos.ventas[0].anuladoEn = 'nunca')))).toHaveLength(1);
+    // A sale line must be a 'venta' with its unit price; other movements may lack a price.
+    expect(errores(json((b) => delete b.datos.movimientos[3].precioUnitario))).toEqual([
+      'Movimientos de stock, registro 4: "precioUnitario" falta o es inválido.',
+    ]);
+    expect(errores(json((b) => (b.datos.movimientos[3].tipo = 'entrada')))).toEqual([
+      'Movimientos de stock, registro 4: "tipo" falta o es inválido.',
+    ]);
+    expect(errores(json((b) => (b.datos.movimientos[3].precioUnitario = 1.5)))).toHaveLength(1);
   });
 
   it('checks the price history and its ingredient', () => {

@@ -3,7 +3,7 @@
 A web app for a food shop, with two independent modules:
 
 1. **Recipe costing** (costos): what it costs to make a product, to decide what to sell it for.
-2. **Stock**: record stock, take it down on each sale, and warn when it runs low.
+2. **Stock**: record stock, register sales (one or more products, with a % discount) that take it down, and warn when it runs low. Sales by day are the app's home page.
 
 The UI is in Spanish (Argentina); code identifiers follow the domain terms (`insumo`, `receta`, `producto`, `movimiento`…).
 
@@ -40,9 +40,11 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 
 ### Stock
 - **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta` (required on every save, zero allowed; products saved before it became required may lack it, the list and product page show them as "Sin precio" until edited, and backups without it still import), `activo`.
-- **movimientos** (stock movements): `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad`, `fecha`, `nota?`, `anuladoEn?`.
+- **ventas** (sales): `fecha`, `descuentoPct` (0 to 100, decimals allowed, over the whole sale), `nota?`, `anuladoEn?`. A sale has no lines of its own: they are its movements.
+- **movimientos** (stock movements): `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad`, `fecha`, `nota?`, `anuladoEn?`, and on sale lines `ventaId` + `precioUnitario`.
   - `cantidad` is positive for entries and sales (the type gives the sign), and signed for adjustments.
   - A movement is never edited or deleted on its own: cancelling ("anular") sets `anuladoEn`, so it stops counting but stays in the history.
+  - A sale line is a `venta` movement with the sale's `ventaId` and `fecha`, and `precioUnitario`: the product's sale price when it was sold (cents). Sales recorded before multi-product sales existed are `venta` movements without either; they still count for the stock.
 
 ### Other
 - **meta**: app bookkeeping, e.g. the date of the last backup. Not included in backups.
@@ -54,7 +56,9 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **Current stock is never stored as an editable number.** It is the sum of the non-cancelled movements, so there is a full history and a sale can be undone. (If this ever gets slow, cache the total on the product and update it in the same transaction.)
 - **Units convert only within a family**: mass g↔kg, volume ml↔l, count u. Mixing families is an error shown on the recipe line, and the line is left out of the total.
 - **Deleting an ingredient used by a recipe is blocked.** Deleting an ingredient also deletes its price history.
-- **Deleting a product deletes its movements** (the UI suggests deactivating it instead).
+- **Deleting a product deletes its movements** (the UI suggests deactivating it instead). **A product that is in a sale**, even a voided one, **can't be deleted**, so past sales keep their totals; it can be deactivated.
+- **A sale keeps the price it was sold at** (`precioUnitario` on each line), unlike recipe costs: changing a product's price doesn't rewrite past sales. The price comes from the product (it can't be typed in the sale); a product without a sale price can't be sold.
+- **A sale is voided as a whole**: voiding sets `anuladoEn` on the sale and on all its movements in one transaction. Its movements can't be voided one by one. To fix a sale, void it and enter it again.
 - **Stock alert**: an active product with stock ≤ its minimum is "low" (bajo); with stock ≤ 0 it is "out of stock" (sin stock).
 
 ## Formulas (costing)
@@ -80,6 +84,16 @@ valor total   = sum(valorStock) over every product, active or not
 
 Products with stock but no cost are left out of the total and counted, so the UI can say so.
 
+## Formulas (sales)
+
+```
+importe     = round(cantidad * precioUnitario)      (per line, whole cents; quantities can be decimal)
+subtotal    = sum(importe)
+descuento   = round(subtotal * descuentoPct / 100)
+total       = subtotal - descuento
+día         = sales grouped by local calendar day; voided sales are listed but left out of the count and total
+```
+
 ## Features
 
 ### Costing
@@ -91,15 +105,23 @@ Products with stock but no cost are left out of the total and counted, so the UI
 ### Stock
 - Products table with current stock, highlighting low and out-of-stock ones, and the total stock value above it (shown once some product has a cost).
 - Required sale price per product (see the data model for older products without one). Optional cost per product. Editing a product warns, without blocking the save, when the cost is over the sale price. The product page shows cost, profit and margin (in red when it's a loss) and the stock value.
-- Keyboard-first movement entry: product (type to pick), quantity, Enter. Warns before stock would go negative.
+- Keyboard-first movement entry for entries and adjustments: product (type to pick), quantity, Enter. Warns before stock would go negative. Sales are not entered here.
+- Product deletion is blocked, with a message, when the product is in a sale.
+
+### Sales (home page)
+- A top-level section, first in the navigation and the page for an empty or unknown hash; the "Mundana" name in the header links to it.
+- The sale being entered: product (type to pick) + quantity (empty = 1) + Enter adds a line; adding a product already in the sale adds to its quantity; ✕ removes a line. It shows each line's price and amount, subtotal, discount and total. Discount % and an optional note, then "Registrar venta" (Enter in the discount or note also registers). One warning lists every product whose stock would go negative.
+- The draft survives going to other pages (not a reload), and counts as unsaved input for the update notice.
+- Sales by day: one row per day with sales, newest first, with the number of sales and the total; each day expands to its sales (time, products, discount, total, note, "Anular"). Today starts expanded. Voided sales show struck through.
+- In the movement history, a sale's lines link to Ventas instead of offering "Anular".
 - Alerts panel and a low-stock counter badge in the navigation.
 - Per-product movement history, with cancelling.
 
 ### Backup
 - **Export** everything to one JSON file, `mundana-YYYY-MM-DD.json`:
   `{ formato: 'mundana-backup', version, exportadoEn, datos: { <every data store> } }`.
-  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history.
-- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product). It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
+  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales.
+- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale); a movement with a `ventaId` must be a `venta` with a `precioUnitario`. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
 - The date of the last backup is kept, and the app warns when there is data and no backup in more than **7 days**.
 - **CSV** exports of products (with cost, profit, margin and stock value), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
 - The app asks for persistent storage (`navigator.storage.persist()`) at startup and again when installed, and says so if the browser doesn't grant it.
@@ -113,8 +135,8 @@ Products with stock but no cost are left out of the total and counted, so the UI
 - No service worker in development (`npm run dev`).
 
 ### Keyboard and usability
-- Single-key shortcuts, active only outside text fields and without Ctrl/Alt/Cmd: `r` Recipes, `i` Ingredients, `p` Products, `m` Movements, `a` Alerts, `b` Backup, `n` the page's "new" field, `/` search, `?` help (Esc closes it).
-- Enter saves a row or movement, Esc cancels a row edit. After saving or cancelling, focus returns to the row; when a save fails, it goes to the first invalid field.
+- Single-key shortcuts, active only outside text fields and without Ctrl/Alt/Cmd: `v` Sales (home), `r` Recipes, `i` Ingredients, `p` Products, `m` Movements, `a` Alerts, `b` Backup, `n` the page's "new" field, `/` search, `?` help (Esc closes it).
+- Enter saves a row or movement (in a sale: adds the product, or registers the sale from the discount or note), Esc cancels a row edit. After saving or cancelling, focus returns to the row; when a save fails, it goes to the first invalid field.
 - Error messages name the field ("Precio de compra: No puede ser negativo") and update while typing after the first save attempt.
 - Numbers are typed as text and parsed Argentine style (`1.234,56`; a lone `.` followed by 3 digits is a thousands separator).
 
@@ -124,7 +146,7 @@ Development happens in a Docker container with **no browser, and none can be ins
 
 **Design principle**: all logic lives in plain TypeScript modules outside the Svelte components. Components only display data and call into that logic.
 
-- **Pure logic** (units, money, costing, stock, validation, shortcuts, service worker strategies): unit tests with Vitest. This is most of the coverage.
+- **Pure logic** (units, money, costing, stock, sales, validation, shortcuts, service worker strategies): unit tests with Vitest. This is most of the coverage.
 - **IndexedDB**: `fake-indexeddb` covers the wrapper, schema migrations, transactions and the repositories.
 - **Backup**: a round-trip test (export, wipe, import, compare), plus validation tests with malformed JSON, unknown versions, missing fields and dangling references.
 - **Svelte components**: not tested directly; keep moving logic out of them instead.

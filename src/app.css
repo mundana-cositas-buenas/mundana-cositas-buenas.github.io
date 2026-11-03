@@ -38,6 +38,8 @@ header {
 
 .marca {
   color: var(--accent);
+  font-weight: bold;
+  text-decoration: none;
 }
 
 nav {
@@ -394,6 +396,21 @@ dd.bajo {
 
 .tabla tr.anulado td:not(.acciones) {
   text-decoration: line-through;
+}
+
+/* Sale being entered */
+.tabla.venta {
+  width: auto;
+  min-width: 32rem;
+  margin-bottom: 0.75rem;
+}
+
+.tabla.venta tfoot td {
+  border-top: 1px solid var(--line);
+}
+
+.tabla.venta tr.total td {
+  font-weight: bold;
 }
 
 form.rapido {

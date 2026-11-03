@@ -15,6 +15,7 @@ export type StoreName =
   | 'productos'
   | 'movimientos'
   | 'historialPrecios'
+  | 'ventas'
   | 'meta';
 
 export const DB_NAME = 'mundana';
@@ -45,6 +46,11 @@ export const MIGRATIONS: readonly Migration[] = [
         if (e) historial.put(e);
       }
     };
+  },
+  // Multi-product sales: the sale record, and its lines are movements with a ventaId.
+  (db, tx) => {
+    db.createObjectStore('ventas', { keyPath: 'id' });
+    tx.objectStore('movimientos').createIndex('ventaId', 'ventaId');
   },
 ];
 

@@ -4,6 +4,17 @@ import { Ediciones } from './ediciones';
 const campo = (value = '') => ({ value, isConnected: true });
 
 describe('Ediciones', () => {
+  it('is pending while some work is marked, whatever the fields say', () => {
+    const e = new Ediciones();
+    e.marcar('venta', true);
+    e.marcar('otra', true);
+    expect(e.pendientes()).toBe(true);
+    e.marcar('venta', false);
+    expect(e.pendientes()).toBe(true);
+    e.marcar('otra', false);
+    expect(e.pendientes()).toBe(false);
+  });
+
   it('has nothing pending until the user types', () => {
     const e = new Ediciones();
     const c = campo('abc');

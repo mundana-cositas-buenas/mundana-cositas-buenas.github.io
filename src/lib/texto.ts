@@ -32,3 +32,23 @@ export function formatFechaHora(iso: string): string {
   if (Number.isNaN(d.getTime())) return '—';
   return `${dos(d.getDate())}/${dos(d.getMonth() + 1)}/${d.getFullYear()} ${dos(d.getHours())}:${dos(d.getMinutes())}`;
 }
+
+/** Local date: "05/03/2026". */
+export function formatFecha(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${dos(d.getDate())}/${dos(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+/** Local time: "14:07". */
+export function formatHora(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${dos(d.getHours())}:${dos(d.getMinutes())}`;
+}
+
+/** The local calendar day of a date, as "2026-03-05" (sorts like the dates). */
+export function diaLocal(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}

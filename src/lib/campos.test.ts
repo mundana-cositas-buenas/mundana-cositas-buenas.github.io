@@ -21,6 +21,13 @@ describe('leerNumero / leerPesos', () => {
   });
 });
 
+describe('leerNumero max', () => {
+  it('is inclusive', () => {
+    expect(leerNumero('100', { max: 100 })).toEqual({ ok: true, valor: 100 });
+    expect(leerNumero('100,01', { max: 100 })).toEqual({ ok: false, error: 'Máximo 100' });
+  });
+});
+
 describe('helpers', () => {
   it('describirErrores labels each field and skips empty ones', () => {
     expect(describirErrores({ nombre: 'Requerido', precio: 'No puede ser negativo', general: 'Falló' }, { nombre: 'Nombre', precio: 'Precio' })).toBe(

@@ -1,4 +1,6 @@
+// The first one is the home page (empty or unknown hash).
 export const SECCIONES = [
+  { id: 'ventas', titulo: 'Ventas' },
   { id: 'costos', titulo: 'Costos' },
   { id: 'stock', titulo: 'Stock' },
   { id: 'backup', titulo: 'Backup' },

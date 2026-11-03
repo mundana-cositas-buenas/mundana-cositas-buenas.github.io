@@ -10,6 +10,7 @@
   import { aplicarVersion, aviso, avisosVersion, type AvisoVersion } from './pwa/registro';
   import { cambiosStock, cargarAlertas } from './stock/repo';
   import StockView from './stock/StockView.svelte';
+  import VentasView from './stock/VentasView.svelte';
 
   let {
     persistencia: pedida,
@@ -104,7 +105,7 @@
 />
 
 <header>
-  <strong class="marca">Mundana</strong>
+  <a class="marca" href="#/ventas" title="Inicio: ventas">Mundana</a>
   <nav>
     {#each SECCIONES as s (s.id)}
       <a href="#/{s.id}" aria-current={seccion === s.id ? 'page' : undefined}>
@@ -132,7 +133,9 @@
         <a href="#/backup">Hacer backup</a>
       </p>
     {/if}
-    {#if seccion === 'costos'}
+    {#if seccion === 'ventas'}
+      <VentasView {db} {ediciones} />
+    {:else if seccion === 'costos'}
       <CostosView {db} {ruta} />
     {:else if seccion === 'stock'}
       <StockView {db} {ruta} {alertas} />
@@ -153,7 +156,7 @@
         {#each ATAJOS as a (a.tecla)}
           <tr><td><kbd>{a.tecla}</kbd></td><td>{a.descripcion}</td></tr>
         {/each}
-        <tr><td><kbd>Enter</kbd></td><td>Guardar la fila o el movimiento que estás escribiendo</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Guardar la fila o el movimiento que estás escribiendo; en una venta, agregar el producto (o registrarla desde Descuento o Nota)</td></tr>
         <tr><td><kbd>Esc</kbd></td><td>Cancelar la edición de una fila / cerrar esta ayuda</td></tr>
         <tr><td><kbd>Tab</kbd></td><td>Pasar al campo siguiente</td></tr>
       </tbody>

@@ -5,7 +5,7 @@
   import { efecto } from './logic';
   import { registrarMovimiento } from './repo';
   import type { Movimiento, Producto, TipoMovimiento } from './types';
-  import { TIPOS, validarMovimiento } from './validar';
+  import { TIPOS_RAPIDOS, validarMovimiento } from './validar';
 
   let {
     db,
@@ -21,7 +21,7 @@
     onregistrado: (m: Movimiento) => void;
   } = $props();
 
-  let tipo = $state<TipoMovimiento>('venta');
+  let tipo = $state<TipoMovimiento>('entrada');
   let productoTexto = $state('');
   let cantidad = $state('');
   let nota = $state('');
@@ -89,7 +89,7 @@
   aria-label="Registrar movimiento"
 >
   <select bind:value={tipo} aria-label="Tipo de movimiento">
-    {#each TIPOS as t (t.id)}
+    {#each TIPOS_RAPIDOS as t (t.id)}
       <option value={t.id}>{t.titulo}</option>
     {/each}
   </select>
