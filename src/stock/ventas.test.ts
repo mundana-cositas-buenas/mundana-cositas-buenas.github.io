@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { Movimiento, Producto, Venta } from './types';
+import type { Movimiento, Producto, Promo, Venta } from './types';
 import {
   agregarLinea,
+  agregarPromo,
+  leerPromo,
+  lineasSueltas,
+  pedidoPorProducto,
+  quitarPromo,
   agruparVentas,
   importe,
   leerLinea,
@@ -53,19 +58,19 @@ describe('totales', () => {
       { cantidad: 2, precioUnitario: 150000 },
       { cantidad: 1, precioUnitario: 400000 },
     ];
-    expect(totales(lineas, 0)).toEqual({ subtotal: 700000, descuento: 0, total: 700000 });
-    expect(totales(lineas, 10)).toEqual({ subtotal: 700000, descuento: 70000, total: 630000 });
-    expect(totales(lineas, 100)).toEqual({ subtotal: 700000, descuento: 700000, total: 0 });
+    expect(totales(lineas, 0)).toEqual({ subtotal: 700000, descuento: 0, promos: 0, total: 700000 });
+    expect(totales(lineas, 10)).toEqual({ subtotal: 700000, descuento: 70000, promos: 0, total: 630000 });
+    expect(totales(lineas, 100)).toEqual({ subtotal: 700000, descuento: 700000, promos: 0, total: 0 });
   });
 
   it('rounds decimal quantities and percentages to cents', () => {
     expect(importe(0.333, 1000)).toBe(333);
     expect(importe(1.5, 99)).toBe(149); // 148.5 → 149
-    expect(totales([{ cantidad: 1, precioUnitario: 999 }], 12.5)).toEqual({ subtotal: 999, descuento: 125, total: 874 });
+    expect(totales([{ cantidad: 1, precioUnitario: 999 }], 12.5)).toEqual({ subtotal: 999, descuento: 125, promos: 0, total: 874 });
   });
 
   it('is zero for an empty sale', () => {
-    expect(totales([], 50)).toEqual({ subtotal: 0, descuento: 0, total: 0 });
+    expect(totales([], 50)).toEqual({ subtotal: 0, descuento: 0, promos: 0, total: 0 });
   });
 
   it('uses the price of the product while entering, and the stored price afterwards', () => {
@@ -157,5 +162,64 @@ describe('agruparVentas / ventasPorDia', () => {
   it('keeps a day whose sales were all voided, with zero', () => {
     const dias = ventasPorDia([{ venta: venta('a', dia1(10), 0, 'x'), lineas: [linea('a', 'jugo', 1, 1000)] }]);
     expect(dias).toMatchObject([{ dia: '2026-11-02', cantidad: 0, total: 0 }]);
+  });
+});
+
+describe('promos in a sale', () => {
+  const promo: Promo = {
+    id: 'combo',
+    actualizadoEn: '',
+    nombre: 'Jugo + ensalada',
+    precio: 500000,
+    activo: true,
+    componentes: [
+      { productoId: 'jugo', cantidad: 1 },
+      { productoId: 'ensalada', cantidad: 1 },
+    ],
+  };
+  const productos = new Map([jugo, ensalada].map((p) => [p.id, p]));
+
+  it('adds promos to the total, and the discount is only over the products sold on their own', () => {
+    const t = totalesEnCurso([{ producto: jugo, cantidad: 2 }], 10, [{ promo, cantidad: 2 }]);
+    expect(t).toEqual({ subtotal: 300000, descuento: 30000, promos: 1000000, total: 1270000 });
+    expect(totales([], 50, [{ cantidad: 1, precio: 500000 }])).toEqual({ subtotal: 0, descuento: 0, promos: 500000, total: 500000 });
+  });
+
+  it('uses the price kept on a stored sale, not its zero-priced component movements', () => {
+    const v: VentaConLineas = {
+      venta: { ...venta('v', new Date(), 10), promos: [{ promoId: 'combo', nombre: 'Combo', precio: 450000, cantidad: 1 }] },
+      lineas: [linea('v', 'jugo', 1, 150000), { ...linea('v', 'ensalada', 1, 0), id: 'c1', promoId: 'combo' }, { ...linea('v', 'jugo', 1, 0), id: 'c2', promoId: 'combo' }],
+    };
+    expect(lineasSueltas(v).map((m) => m.productoId)).toEqual(['jugo']);
+    expect(totalesDe(v)).toEqual({ subtotal: 150000, descuento: 15000, promos: 450000, total: 585000 });
+  });
+
+  it('reads a promo line: a positive quantity, 1 when empty, and every component active', () => {
+    expect(leerPromo(promo, '', productos)).toEqual({ ok: true, linea: { promo, cantidad: 1 } });
+    expect(leerPromo(promo, '0', productos)).toMatchObject({ ok: false, campo: 'cantidad' });
+    const sinEnsalada = new Map([...productos, ['ensalada', { ...ensalada, activo: false }]]);
+    expect(leerPromo(promo, '1', sinEnsalada)).toEqual({ ok: false, campo: 'producto', error: 'Incluye un producto desactivado: ensalada' });
+  });
+
+  it('merges a repeated promo and removes it', () => {
+    let ps = agregarPromo([], { promo, cantidad: 1 });
+    ps = agregarPromo(ps, { promo, cantidad: 2 });
+    expect(ps).toEqual([{ promo, cantidad: 3 }]);
+    expect(quitarPromo(ps, 'combo')).toEqual([]);
+  });
+
+  it('counts promo components with the loose lines for the stock', () => {
+    const pedido = pedidoPorProducto([{ producto: jugo, cantidad: 1 }], [{ promo, cantidad: 2 }], productos);
+    expect([...pedido.values()].map((p) => [p.producto.id, p.cantidad])).toEqual([
+      ['jugo', 3],
+      ['ensalada', 2],
+    ]);
+    const stock = new Map([
+      ['jugo', 2],
+      ['ensalada', 5],
+    ]);
+    expect(quedanNegativos([{ producto: jugo, cantidad: 1 }], stock, [{ promo, cantidad: 2 }], productos)).toEqual([
+      { producto: jugo, despues: -1 },
+    ]);
   });
 });

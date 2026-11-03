@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Producto } from './types';
-import { avisosProducto, productoFormDesde, productoVacio, TIPOS_RAPIDOS, validarMovimiento, validarProducto, validarVenta, type MovimientoForm } from './validar';
+import type { Producto, Promo } from './types';
+import {
+  avisosProducto,
+  promoFormDesde,
+  promoVacia,
+  validarPromo,
+  productoFormDesde, productoVacio, TIPOS_RAPIDOS, validarMovimiento, validarProducto, validarVenta, type MovimientoForm, type PromoForm } from './validar';
 
 describe('validarProducto', () => {
   it('fills defaults for empty optional fields', () => {
@@ -103,5 +108,55 @@ describe('validarVenta', () => {
 
   it('leaves sales out of the quick movement form', () => {
     expect(TIPOS_RAPIDOS.map((t) => t.id)).toEqual(['entrada', 'ajuste']);
+  });
+});
+
+describe('validarPromo', () => {
+  const form = (f: Partial<PromoForm> = {}): PromoForm => ({
+    ...promoVacia(),
+    nombre: ' Combo ',
+    precio: '5.000',
+    componentes: [
+      { productoId: 'jugo', cantidad: '1' },
+      { productoId: 'ensalada', cantidad: '0,5' },
+    ],
+    ...f,
+  });
+
+  it('reads name, price and components', () => {
+    expect(validarPromo(form())).toEqual({
+      ok: true,
+      datos: {
+        nombre: 'Combo',
+        precio: 500000,
+        activo: true,
+        componentes: [
+          { productoId: 'jugo', cantidad: 1 },
+          { productoId: 'ensalada', cantidad: 0.5 },
+        ],
+      },
+    });
+    expect(validarPromo(form({ precio: '0' })).ok).toBe(true);
+  });
+
+  it('merges a product added twice', () => {
+    const r = validarPromo(form({ componentes: [{ productoId: 'jugo', cantidad: '1' }, { productoId: 'jugo', cantidad: '2' }] }));
+    expect(r.ok && r.datos.componentes).toEqual([{ productoId: 'jugo', cantidad: 3 }]);
+  });
+
+  it('reports every invalid field', () => {
+    expect(validarPromo(form({ nombre: '', precio: '', componentes: [] }))).toEqual({
+      ok: false,
+      errores: { nombre: 'Requerido', precio: 'Requerido', componentes: 'Agregá al menos un producto' },
+    });
+    expect(validarPromo(form(), ['combo'])).toMatchObject({ ok: false, errores: { nombre: 'Ya existe una promo con ese nombre' } });
+    const malas = form({ componentes: [{ productoId: 'jugo', cantidad: '0' }, { productoId: 'x', cantidad: 'a' }] });
+    expect(validarPromo(malas)).toEqual({ ok: false, errores: { componentes: 'Hay 2 cantidades inválidas' } });
+  });
+
+  it('round-trips through the form', () => {
+    const p: Promo = { id: 'p', actualizadoEn: '', nombre: 'Combo', precio: 123450, activo: false, componentes: [{ productoId: 'jugo', cantidad: 1.5 }] };
+    const r = validarPromo(promoFormDesde(p));
+    expect(r).toEqual({ ok: true, datos: { nombre: 'Combo', precio: 123450, activo: false, componentes: [{ productoId: 'jugo', cantidad: 1.5 }] } });
   });
 });

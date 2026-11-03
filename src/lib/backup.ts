@@ -2,7 +2,7 @@
 
 import type { Insumo, PrecioHistorico, Receta, RecetaLinea } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
-import type { Movimiento, Producto, Venta } from '../stock/types';
+import type { Movimiento, Producto, Promo, Venta } from '../stock/types';
 import { idbRequest as req, type DB, type Registro, type StoreName } from './db';
 import { esUnidad, esUnidadBase } from './units';
 
@@ -10,10 +10,11 @@ export const FORMATO = 'mundana-backup';
 // Bump when the shape of the records changes, and teach leerBackup to upgrade older files.
 // 2: adds historialPrecios (v1 files are read with an empty history).
 // 3: adds ventas, and ventaId/precioUnitario on sale movements (older files are read with no sales).
-export const VERSION = 3;
+// 4: adds promos, promos on sales and promoId on their movements (older files are read with no promos).
+export const VERSION = 4;
 
 /** Data stores, in dependency order. `meta` (e.g. the last backup date) is not exported. */
-export const STORES = ['insumos', 'historialPrecios', 'recetas', 'recetaLineas', 'productos', 'ventas', 'movimientos'] as const;
+export const STORES = ['insumos', 'historialPrecios', 'recetas', 'recetaLineas', 'productos', 'promos', 'ventas', 'movimientos'] as const;
 export type StoreDatos = (typeof STORES)[number];
 
 export const NOMBRES: Record<StoreDatos, string> = {
@@ -22,6 +23,7 @@ export const NOMBRES: Record<StoreDatos, string> = {
   recetas: 'Recetas',
   recetaLineas: 'Líneas de receta',
   productos: 'Productos',
+  promos: 'Promos',
   ventas: 'Ventas',
   movimientos: 'Movimientos de stock',
 };
@@ -32,6 +34,7 @@ export interface Datos {
   recetas: Receta[];
   recetaLineas: RecetaLinea[];
   productos: Producto[];
+  promos: Promo[];
   ventas: Venta[];
   movimientos: Movimiento[];
 }
@@ -159,6 +162,20 @@ const unoDe =
 
 type Esquema = Record<string, Chequeo>;
 
+const cumple = (esquema: Esquema, v: unknown) => esObjeto(v) && Object.keys(esquema).every((k) => esquema[k](v[k]));
+
+/** A list of objects that each match `esquema`; optionally non-empty and with no two sharing `unico`. */
+const listaDe =
+  (esquema: Esquema, { noVacia = false, unico }: { noVacia?: boolean; unico?: string } = {}): Chequeo =>
+  (v) =>
+    Array.isArray(v) &&
+    (!noVacia || v.length > 0) &&
+    v.every((x) => cumple(esquema, x)) &&
+    (!unico || new Set(v.map((x: Record<string, unknown>) => x[unico])).size === v.length);
+
+const COMPONENTE: Esquema = { productoId: noVacio, cantidad: positivo };
+const PROMO_VENDIDA: Esquema = { promoId: noVacio, nombre: texto, precio: centavos, cantidad: positivo };
+
 const REGISTRO: Esquema = { id: noVacio, actualizadoEn: texto };
 
 const LINEA: Esquema = { ...REGISTRO, recetaId: noVacio, orden: numero };
@@ -184,11 +201,22 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
       return 'tipo de línea desconocido';
     case 'productos':
       return { ...REGISTRO, nombre: texto, unidad: texto, stockMinimo: noNegativo, costo: opcional(centavos), precioVenta: opcional(centavos), activo: booleano };
+    case 'promos':
+      return { ...REGISTRO, nombre: texto, precio: centavos, activo: booleano, componentes: listaDe(COMPONENTE, { noVacia: true, unico: 'productoId' }) };
     case 'ventas':
-      return { ...REGISTRO, fecha, descuentoPct: porcentaje, nota: opcional(texto), anuladoEn: opcional(fecha) };
+      return {
+        ...REGISTRO,
+        fecha,
+        descuentoPct: porcentaje,
+        nota: opcional(texto),
+        anuladoEn: opcional(fecha),
+        promos: opcional(listaDe(PROMO_VENDIDA, { unico: 'promoId' })),
+      };
     case 'movimientos': {
-      // A sale line (with ventaId) must be a 'venta' and carry its unit price.
+      // A sale line (with ventaId) must be a 'venta' and carry its unit price;
+      // a promo component (with promoId) must be a sale line with price 0.
       const deVenta = r.ventaId !== undefined;
+      const dePromo = r.promoId !== undefined;
       return {
         ...REGISTRO,
         productoId: noVacio,
@@ -197,8 +225,9 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
         fecha,
         nota: opcional(texto),
         anuladoEn: opcional(fecha),
-        ventaId: opcional(noVacio),
-        precioUnitario: deVenta ? centavos : opcional(centavos),
+        ventaId: dePromo ? noVacio : opcional(noVacio),
+        precioUnitario: dePromo ? unoDe(0) : deVenta ? centavos : opcional(centavos),
+        promoId: opcional(noVacio),
       };
     }
   }
@@ -234,6 +263,7 @@ export function leerBackup(contenido: string): Lectura {
   if (!esObjeto(datos)) return { ok: false, errores: [...errores, 'Faltan los datos.'] };
   if (v === 1 && datos.historialPrecios === undefined) datos.historialPrecios = [];
   if ((v as number) < 3 && datos.ventas === undefined) datos.ventas = [];
+  if ((v as number) < 4 && datos.promos === undefined) datos.promos = [];
 
   const ids = {} as Record<StoreDatos, Set<string>>;
   for (const s of STORES) {
@@ -273,6 +303,34 @@ export function leerBackup(contenido: string): Lectura {
   ref('recetaLineas', 'insumoId', 'insumos');
   ref('movimientos', 'productoId', 'productos');
   ref('movimientos', 'ventaId', 'ventas');
+  // Inside lists: a promo's components → products; a sale's promos → promos.
+  const refEnLista = (s: StoreDatos, lista: string, campo: string, destino: StoreDatos) => {
+    const registros = datos[s];
+    if (!Array.isArray(registros) || !Array.isArray(datos[destino])) return;
+    registros.forEach((r, i) => {
+      if (!esObjeto(r) || !Array.isArray(r[lista])) return;
+      if (r[lista].some((x: unknown) => esObjeto(x) && typeof x[campo] === 'string' && !ids[destino].has(x[campo]))) {
+        errores.push(`${NOMBRES[s]}, registro ${i + 1}: "${lista}" apunta a un registro que no está en el backup.`);
+      }
+    });
+  };
+  refEnLista('promos', 'componentes', 'productoId', 'productos');
+  refEnLista('ventas', 'promos', 'promoId', 'promos');
+  // A promo component's sale must include that promo.
+  if (Array.isArray(datos.movimientos) && Array.isArray(datos.ventas)) {
+    const promosDe = new Map<string, Set<unknown>>();
+    for (const r of datos.ventas) {
+      if (esObjeto(r) && typeof r.id === 'string') {
+        promosDe.set(r.id, new Set(Array.isArray(r.promos) ? r.promos.map((p: unknown) => esObjeto(p) && p.promoId) : []));
+      }
+    }
+    datos.movimientos.forEach((r, i) => {
+      if (!esObjeto(r) || typeof r.promoId !== 'string' || typeof r.ventaId !== 'string') return;
+      if (promosDe.has(r.ventaId) && !promosDe.get(r.ventaId)!.has(r.promoId)) {
+        errores.push(`${NOMBRES.movimientos}, registro ${i + 1}: "promoId" no es una promo de su venta.`);
+      }
+    });
+  }
 
   if (errores.length) {
     const extra = errores.length - MAX_ERRORES;

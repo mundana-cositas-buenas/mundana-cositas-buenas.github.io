@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { DB } from '../lib/db';
   import type { Ediciones } from '../pwa/ediciones';
-  import { listarProductos, listarVentas, stockActualDe } from './repo';
-  import type { Producto } from './types';
+  import { listarProductos, listarPromos, listarVentas, stockActualDe } from './repo';
+  import type { Producto, Promo } from './types';
   import VentaEnCurso from './VentaEnCurso.svelte';
   import VentasDias from './VentasDias.svelte';
   import type { VentaConLineas } from './ventas';
@@ -10,12 +10,13 @@
   let { db, ediciones }: { db: DB; ediciones: Ediciones } = $props();
 
   let productos = $state<Producto[]>([]);
+  let promos = $state<Promo[]>([]);
   let stock = $state(new Map<string, number>());
   let ventas = $state<VentaConLineas[]>([]);
   let cargando = $state(true);
 
   async function cargar() {
-    [productos, stock, ventas] = await Promise.all([listarProductos(db), stockActualDe(db), listarVentas(db)]);
+    [productos, promos, stock, ventas] = await Promise.all([listarProductos(db), listarPromos(db), stockActualDe(db), listarVentas(db)]);
     cargando = false;
   }
   cargar();
@@ -41,7 +42,7 @@
   {#if !productos.some((p) => p.activo)}
     <p class="muted">Todavía no hay productos activos. <a href="#/stock">Cargá los productos</a> para registrar ventas.</p>
   {:else}
-    <VentaEnCurso {db} {productos} {stock} {ediciones} onregistrada={registrada} />
+    <VentaEnCurso {db} {productos} {promos} {stock} {ediciones} onregistrada={registrada} />
   {/if}
 
   <h2>Ventas por día</h2>

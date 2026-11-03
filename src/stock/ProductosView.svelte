@@ -6,7 +6,17 @@
   import { coincide } from '../lib/texto';
   import { nivel, valorInventario } from './logic';
   import ProductoFila from './ProductoFila.svelte';
-  import { borrarProducto, contarMovimientos, guardarProducto, listarProductos, ProductoEnVentas, stockActualDe, ventasConProducto } from './repo';
+  import {
+    borrarProducto,
+    contarMovimientos,
+    guardarProducto,
+    listarProductos,
+    ProductoEnPromos,
+    ProductoEnVentas,
+    promosConProducto,
+    stockActualDe,
+    ventasConProducto,
+  } from './repo';
   import type { Producto } from './types';
   import type { DatosProducto } from './validar';
 
@@ -60,6 +70,11 @@
     const ventas = await ventasConProducto(db, p.id);
     if (ventas) {
       mensaje = new ProductoEnVentas(ventas).message;
+      return;
+    }
+    const promos = await promosConProducto(db, p.id);
+    if (promos.length) {
+      mensaje = new ProductoEnPromos(promos.sort()).message;
       return;
     }
     const n = await contarMovimientos(db, p.id);

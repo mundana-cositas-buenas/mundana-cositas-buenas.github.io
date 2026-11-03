@@ -16,6 +16,7 @@ export type StoreName =
   | 'movimientos'
   | 'historialPrecios'
   | 'ventas'
+  | 'promos'
   | 'meta';
 
 export const DB_NAME = 'mundana';
@@ -51,6 +52,10 @@ export const MIGRATIONS: readonly Migration[] = [
   (db, tx) => {
     db.createObjectStore('ventas', { keyPath: 'id' });
     tx.objectStore('movimientos').createIndex('ventaId', 'ventaId');
+  },
+  // Promos: their components live in the promo record.
+  (db) => {
+    db.createObjectStore('promos', { keyPath: 'id' });
   },
 ];
 

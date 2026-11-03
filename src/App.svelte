@@ -138,7 +138,7 @@
     {:else if seccion === 'costos'}
       <CostosView {db} {ruta} />
     {:else if seccion === 'stock'}
-      <StockView {db} {ruta} {alertas} />
+      <StockView {db} {ruta} {alertas} {ediciones} />
     {:else}
       <BackupView {db} />
     {/if}

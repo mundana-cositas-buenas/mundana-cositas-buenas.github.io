@@ -1,8 +1,8 @@
 <script module lang="ts">
-  import type { LineaEnCurso } from './ventas';
+  import type { LineaEnCurso, PromoEnCurso } from './ventas';
 
   // The sale being entered survives going to another page and back (not a reload).
-  const borrador = $state({ lineas: [] as LineaEnCurso[], descuento: '', nota: '' });
+  const borrador = $state({ lineas: [] as LineaEnCurso[], promos: [] as PromoEnCurso[], descuento: '', nota: '' });
 </script>
 
 <script lang="ts">
@@ -12,20 +12,34 @@
   import { formatNumero, formatPesos } from '../lib/money';
   import { buscarPorNombre } from '../lib/texto';
   import type { Ediciones } from '../pwa/ediciones';
+  import { detalleComponentes, nombreEnVenta, problemaPromo } from './promos';
   import { registrarVenta } from './repo';
-  import type { Producto } from './types';
+  import type { Producto, Promo } from './types';
   import { ETIQUETAS_VENTA, validarVenta } from './validar';
-  import { agregarLinea, importe, leerLinea, quedanNegativos, quitarLinea, totalesEnCurso, type VentaConLineas } from './ventas';
+  import {
+    agregarLinea,
+    agregarPromo,
+    importe,
+    leerLinea,
+    leerPromo,
+    quedanNegativos,
+    quitarLinea,
+    quitarPromo,
+    totalesEnCurso,
+    type VentaConLineas,
+  } from './ventas';
 
   let {
     db,
     productos,
+    promos,
     stock,
     ediciones,
     onregistrada,
   }: {
     db: DB;
     productos: Producto[];
+    promos: Promo[];
     stock: ReadonlyMap<string, number>;
     ediciones: Ediciones;
     onregistrada: (v: VentaConLineas) => void;
@@ -40,26 +54,39 @@
   let cantidadInput: HTMLInputElement | undefined = $state();
   let descuentoInput: HTMLInputElement | undefined = $state();
 
-  const activos = $derived(productos.filter((p) => p.activo));
-  const producto = $derived(buscarPorNombre(activos, productoTexto));
+  const porId = $derived(new Map(productos.map((p) => [p.id, p])));
+  // The picker offers active products and active promos, these named "Promo: …".
+  const opciones = $derived([
+    ...productos.filter((p) => p.activo).map((producto) => ({ nombre: producto.nombre, producto, promo: undefined })),
+    ...promos.filter((p) => p.activo).map((promo) => ({ nombre: nombreEnVenta(promo), producto: undefined, promo })),
+  ]);
+  const elegido = $derived(buscarPorNombre(opciones, productoTexto));
+  const producto = $derived(elegido?.producto);
+  const promo = $derived(elegido?.promo);
   const v = $derived(validarVenta(borrador));
-  const t = $derived(totalesEnCurso(borrador.lineas, v.ok ? v.datos.descuentoPct : 0));
+  const t = $derived(totalesEnCurso(borrador.lineas, v.ok ? v.datos.descuentoPct : 0, borrador.promos));
+  const vacia = $derived(!borrador.lineas.length && !borrador.promos.length);
   const errorDescuento = $derived(!v.ok && (intentado || borrador.descuento.trim()) ? describirErrores(v.errores, ETIQUETAS_VENTA) : '');
 
-  // A draft kept from before uses the products as they are now (price, name, still active).
+  // A draft kept from before uses the products and promos as they are now (price, name, still sellable).
   $effect(() => {
-    const porId = new Map(productos.map((p) => [p.id, p]));
+    const productosAhora = porId;
+    const promosAhora = new Map(promos.map((p) => [p.id, p]));
     untrack(() => {
       borrador.lineas = borrador.lineas.flatMap((l) => {
-        const p = porId.get(l.producto.id);
+        const p = productosAhora.get(l.producto.id);
         return p?.activo && p.precioVenta !== undefined ? [{ ...l, producto: p }] : [];
+      });
+      borrador.promos = borrador.promos.flatMap((l) => {
+        const p = promosAhora.get(l.promo.id);
+        return p?.activo && !problemaPromo(p, productosAhora) ? [{ ...l, promo: p }] : [];
       });
     });
   });
 
   // An unregistered sale counts as unsaved input ("Recargar" asks first).
   $effect(() => {
-    ediciones.marcar('venta', borrador.lineas.length > 0 || !!borrador.descuento.trim() || !!borrador.nota.trim());
+    ediciones.marcar('venta', !vacia || !!borrador.descuento.trim() || !!borrador.nota.trim());
   });
 
   // The home page exists to register sales: start there.
@@ -68,13 +95,14 @@
   });
 
   function agregar() {
-    const r = leerLinea(producto, productoTexto, cantidad);
+    const r = promo ? leerPromo(promo, cantidad, porId) : leerLinea(producto, productoTexto, cantidad);
     if (!r.ok) {
       error = r.error;
       (r.campo === 'producto' ? productoInput : cantidadInput)?.focus();
       return;
     }
-    borrador.lineas = agregarLinea(borrador.lineas, r.linea);
+    if ('promo' in r.linea) borrador.promos = agregarPromo(borrador.promos, r.linea);
+    else borrador.lineas = agregarLinea(borrador.lineas, r.linea);
     productoTexto = '';
     cantidad = '';
     error = '';
@@ -86,11 +114,16 @@
     productoInput?.focus();
   }
 
+  function quitarLaPromo(id: string) {
+    borrador.promos = quitarPromo(borrador.promos, id);
+    productoInput?.focus();
+  }
+
   async function registrar() {
     if (guardando) return;
     intentado = true;
-    if (!borrador.lineas.length) {
-      error = 'Agregá al menos un producto';
+    if (vacia) {
+      error = 'Agregá al menos un producto o una promo';
       productoInput?.focus();
       return;
     }
@@ -99,17 +132,19 @@
       descuentoInput?.focus();
       return;
     }
-    const negativos = quedanNegativos(borrador.lineas, stock);
+    const negativos = quedanNegativos(borrador.lineas, stock, borrador.promos, porId);
     if (negativos.length) {
       const lista = negativos.map((n) => `· ${n.producto.nombre}: ${formatNumero(n.despues)} ${n.producto.unidad}`).join('\n');
       if (!confirm(`El stock quedaría negativo:\n${lista}\nPuede que falte cargar una entrada. ¿Registrar igual?`)) return;
     }
     const datos = v.datos;
     const lineas = borrador.lineas.map((l) => ({ productoId: l.producto.id, cantidad: l.cantidad }));
+    const promosVendidas = borrador.promos.map((l) => ({ promoId: l.promo.id, cantidad: l.cantidad }));
     guardando = true;
     try {
-      const r = await registrarVenta(db, lineas, datos);
+      const r = await registrarVenta(db, lineas, datos, new Date(), promosVendidas);
       borrador.lineas = [];
+      borrador.promos = [];
       borrador.descuento = '';
       borrador.nota = '';
       error = '';
@@ -139,13 +174,13 @@
       bind:value={productoTexto}
       data-atajo="nuevo"
       list="productos-venta"
-      placeholder="Producto…"
-      aria-label="Producto"
-      aria-invalid={!!productoTexto.trim() && !producto}
+      placeholder="Producto o promo…"
+      aria-label="Producto o promo"
+      aria-invalid={!!productoTexto.trim() && !elegido}
     />
     <datalist id="productos-venta">
-      {#each activos as p (p.id)}
-        <option value={p.nombre}></option>
+      {#each opciones as o (o.producto ? `producto-${o.producto.id}` : `promo-${o.promo.id}`)}
+        <option value={o.nombre}></option>
       {/each}
     </datalist>
     <input
@@ -163,11 +198,14 @@
         {producto.nombre}:
         {#if producto.precioVenta === undefined}<span class="aviso">Sin precio</span>{:else}{formatPesos(producto.precioVenta)}{/if}
         · stock {formatNumero(stock.get(producto.id) ?? 0)} {producto.unidad}
+      {:else if promo}
+        {formatPesos(promo.precio)} · {detalleComponentes(promo.componentes, porId)}
+        {#if problemaPromo(promo, porId)}<span class="aviso">{problemaPromo(promo, porId)}</span>{/if}
       {/if}
     </span>
   </form>
 
-  {#if borrador.lineas.length}
+  {#if !vacia}
     <table class="tabla venta">
       <thead>
         <tr>
@@ -192,19 +230,42 @@
             </td>
           </tr>
         {/each}
+        {#each borrador.promos as l (l.promo.id)}
+          <tr>
+            <td>
+              {nombreEnVenta(l.promo)}
+              <br /><span class="muted">{detalleComponentes(l.promo.componentes, porId)}</span>
+            </td>
+            <td class="num">{formatNumero(l.cantidad)}</td>
+            <td class="num">{formatPesos(l.promo.precio)}</td>
+            <td class="num">{formatPesos(importe(l.cantidad, l.promo.precio))}</td>
+            <td class="acciones">
+              <button type="button" class="secundario" title="Quitar" aria-label="Quitar {nombreEnVenta(l.promo)}" onclick={() => quitarLaPromo(l.promo.id)}>
+                ✕
+              </button>
+            </td>
+          </tr>
+        {/each}
       </tbody>
       <tfoot>
         {#if t.descuento}
           <tr>
-            <td colspan="3">Subtotal</td>
+            <td colspan="3">{borrador.promos.length ? 'Subtotal productos' : 'Subtotal'}</td>
             <td class="num">{formatPesos(t.subtotal)}</td>
             <td></td>
           </tr>
           <tr>
-            <td colspan="3">Descuento {v.ok ? formatNumero(v.datos.descuentoPct, 2) : ''} %</td>
+            <td colspan="3">Descuento {v.ok ? formatNumero(v.datos.descuentoPct, 2) : ''} %{#if borrador.promos.length} (no se aplica a las promos){/if}</td>
             <td class="num">-{formatPesos(t.descuento)}</td>
             <td></td>
           </tr>
+          {#if borrador.promos.length}
+            <tr>
+              <td colspan="3">Promos</td>
+              <td class="num">{formatPesos(t.promos)}</td>
+              <td></td>
+            </tr>
+          {/if}
         {/if}
         <tr class="total">
           <td colspan="3">Total</td>
@@ -239,7 +300,7 @@
     </label>
     <input bind:value={borrador.nota} placeholder="Nota (opcional)" aria-label="Nota de la venta" />
     <button type="submit" disabled={guardando}>Registrar venta</button>
-    {#if borrador.lineas.length}<strong>Total {formatPesos(t.total)}</strong>{/if}
+    {#if !vacia}<strong>Total {formatPesos(t.total)}</strong>{/if}
   </form>
   {#if error || errorDescuento}
     <p class="error" role="alert">{error || errorDescuento}</p>

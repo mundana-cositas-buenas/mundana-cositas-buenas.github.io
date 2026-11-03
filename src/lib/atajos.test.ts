@@ -17,6 +17,7 @@ describe('atajos', () => {
     expect(atajoDe(tecla('i'), body)).toEqual({ tipo: 'ir', hash: '#/costos/insumos' });
     expect(atajoDe(tecla('v'), body)).toEqual({ tipo: 'ir', hash: '#/ventas' });
     expect(atajoDe(tecla('M'), body)).toEqual({ tipo: 'ir', hash: '#/stock/movimientos' }); // Caps Lock
+    expect(atajoDe(tecla('o'), body)).toEqual({ tipo: 'ir', hash: '#/stock/promos' });
     expect(atajoDe(tecla('/'), null)).toEqual({ tipo: 'foco', objetivo: 'buscar' });
     expect(atajoDe(tecla('?'), body)).toEqual({ tipo: 'ayuda' });
     expect(atajoDe(tecla('x'), body)).toBeUndefined();

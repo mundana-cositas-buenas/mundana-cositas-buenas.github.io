@@ -4,7 +4,8 @@
   import { diaLocal, formatFechaHora, formatHora } from '../lib/texto';
   import { anularVenta } from './repo';
   import type { Producto } from './types';
-  import { totalesDe, ventasPorDia, type VentaConLineas } from './ventas';
+  import { nombreEnVenta } from './promos';
+  import { lineasSueltas, totalesDe, ventasPorDia, type VentaConLineas } from './ventas';
 
   let {
     db,
@@ -32,13 +33,14 @@
     abiertos = s;
   }
 
-  /** "Jugo × 2, Ensalada × 1", by product name. */
+  /** "Ensalada × 1, Jugo × 2, Promo: Combo × 1": products by name, then promos (their components aren't listed). */
   function detalle(v: VentaConLineas): string {
-    return v.lineas
+    const porNombre = (a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' });
+    const sueltos = lineasSueltas(v)
       .map((m) => ({ nombre: porId.get(m.productoId)?.nombre ?? '(borrado)', cantidad: m.cantidad }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
-      .map((l) => `${l.nombre} × ${formatNumero(l.cantidad)}`)
-      .join(', ');
+      .sort(porNombre);
+    const promos = (v.venta.promos ?? []).map((p) => ({ nombre: nombreEnVenta(p), cantidad: p.cantidad })).sort(porNombre);
+    return [...sueltos, ...promos].map((l) => `${l.nombre} × ${formatNumero(l.cantidad)}`).join(', ');
   }
 
   async function anular(v: VentaConLineas) {

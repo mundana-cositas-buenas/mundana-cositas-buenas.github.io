@@ -5,21 +5,28 @@ import {
   anularMovimiento,
   anularVenta,
   borrarProducto,
+  borrarPromo,
   cambiosStock,
   cargarAlertas,
   contarMovimientos,
   guardarProducto,
+  guardarPromo,
   listarMovimientos,
   listarProductos,
+  listarPromos,
   listarVentas,
   movimientosDe,
+  ProductoEnPromos,
   ProductoEnVentas,
+  PromoEnVentas,
+  promosConProducto,
   registrarMovimiento,
   registrarVenta,
   stockActualDe,
   ventasConProducto,
+  ventasConPromo,
 } from './repo';
-import type { Producto } from './types';
+import type { Producto, Promo } from './types';
 
 let n = 0;
 const open: DB[] = [];
@@ -210,5 +217,119 @@ describe('ventas', () => {
       cambiosStock.removeEventListener('cambio', f);
     }
     expect(f).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('promos', () => {
+  const conPrecio = (nombre: string, precioVenta: number): Producto => ({ ...producto(nombre), precioVenta });
+  const nuevaPromo = (nombre: string, precio: number, componentes: Promo['componentes']): Promo => ({
+    id: newId(),
+    actualizadoEn: '',
+    nombre,
+    precio,
+    activo: true,
+    componentes,
+  });
+
+  async function preparar() {
+    const db = await fresh();
+    const jugo = await guardarProducto(db, conPrecio('jugo', 150000));
+    const ensalada = await guardarProducto(db, conPrecio('ensalada', 400000));
+    const combo = await guardarPromo(
+      db,
+      nuevaPromo('Combo', 500000, [
+        { productoId: jugo.id, cantidad: 1 },
+        { productoId: ensalada.id, cantidad: 0.5 },
+      ]),
+    );
+    return { db, jugo, ensalada, combo };
+  }
+
+  it('saves and lists promos sorted by name, refusing unknown products', async () => {
+    const { db, combo } = await preparar();
+    await guardarPromo(db, nuevaPromo('Almuerzo', 1, [{ productoId: combo.componentes[0].productoId, cantidad: 1 }]));
+    expect((await listarPromos(db)).map((p) => p.nombre)).toEqual(['Almuerzo', 'Combo']);
+    expect(combo.actualizadoEn).not.toBe('');
+    await expect(guardarPromo(db, nuevaPromo('Mala', 1, [{ productoId: 'nada', cantidad: 1 }]))).rejects.toThrow('ya no existe');
+    expect(await listarPromos(db)).toHaveLength(2);
+  });
+
+  it('sells a promo: kept on the sale at its price, components taken out of the stock', async () => {
+    const { db, jugo, ensalada, combo } = await preparar();
+    const r = await registrarVenta(db, [{ productoId: jugo.id, cantidad: 1 }], { descuentoPct: 10 }, t(5), [{ promoId: combo.id, cantidad: 2 }]);
+    expect(r.venta.promos).toEqual([{ promoId: combo.id, nombre: 'Combo', precio: 500000, cantidad: 2 }]);
+    const componentes = r.lineas.filter((m) => m.promoId);
+    expect(componentes.map((m) => [m.productoId, m.cantidad, m.precioUnitario])).toEqual([
+      [jugo.id, 2, 0],
+      [ensalada.id, 1, 0],
+    ]);
+    expect(componentes.every((m) => m.ventaId === r.venta.id && m.tipo === 'venta' && m.fecha === t(5).toISOString())).toBe(true);
+    const stock = await stockActualDe(db);
+    expect(stock.get(jugo.id)).toBe(-3);
+    expect(stock.get(ensalada.id)).toBe(-1);
+    const [guardada] = await listarVentas(db);
+    expect(guardada.venta).toEqual(r.venta);
+    expect(guardada.lineas.map((m) => m.id).sort()).toEqual(r.lineas.map((m) => m.id).sort());
+
+    // Changing the promo afterwards doesn't change the sale.
+    await guardarPromo(db, { ...combo, nombre: 'Combo nuevo', precio: 1 });
+    expect((await listarVentas(db))[0].venta.promos?.[0]).toMatchObject({ nombre: 'Combo', precio: 500000 });
+
+    // Voiding the sale voids the components too.
+    const anulada = await anularVenta(db, r.venta.id);
+    expect(anulada.lineas.every((m) => m.anuladoEn)).toBe(true);
+    expect((await stockActualDe(db)).get(jugo.id)).toBe(0);
+  });
+
+  it('sells promos alone, and keeps sales without promos as before', async () => {
+    const { db, jugo, combo } = await preparar();
+    const solo = await registrarVenta(db, [], { descuentoPct: 0 }, t(1), [{ promoId: combo.id, cantidad: 1 }]);
+    expect(solo.lineas).toHaveLength(2);
+    const sin = await registrarVenta(db, [{ productoId: jugo.id, cantidad: 1 }], { descuentoPct: 0 });
+    expect('promos' in sin.venta).toBe(false);
+  });
+
+  it('records nothing if a promo is missing, repeated, inactive or has an inactive or deleted component', async () => {
+    const { db, jugo, ensalada, combo } = await preparar();
+    const vender = (promoId: string) => registrarVenta(db, [{ productoId: jugo.id, cantidad: 1 }], { descuentoPct: 0 }, new Date(), [{ promoId, cantidad: 1 }]);
+    await expect(vender('nada')).rejects.toThrow('ya no existe');
+    await expect(
+      registrarVenta(db, [], { descuentoPct: 0 }, new Date(), [
+        { promoId: combo.id, cantidad: 1 },
+        { promoId: combo.id, cantidad: 1 },
+      ]),
+    ).rejects.toThrow('repetida');
+    await guardarPromo(db, { ...combo, activo: false });
+    await expect(vender(combo.id)).rejects.toThrow('no está activa');
+    await guardarPromo(db, { ...combo, activo: true });
+    await guardarProducto(db, { ...ensalada, activo: false });
+    await expect(vender(combo.id)).rejects.toThrow('incluye un producto desactivado: ensalada');
+    expect(await listarVentas(db)).toEqual([]);
+    expect(await listarMovimientos(db)).toEqual([]);
+  });
+
+  it('blocks deleting a product that is in a promo, and a promo that was sold', async () => {
+    const { db, jugo, ensalada, combo } = await preparar();
+    expect(await promosConProducto(db, jugo.id)).toEqual(['Combo']);
+    const e = await borrarProducto(db, ensalada.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(ProductoEnPromos);
+    expect((e as Error).message).toBe('No se puede borrar: está en la promo "Combo". Sacalo de la promo, o desmarcalo como activo en lugar de borrarlo.');
+    expect(await listarProductos(db)).toHaveLength(2);
+
+    const r = await registrarVenta(db, [], { descuentoPct: 0 }, new Date(), [{ promoId: combo.id, cantidad: 1 }]);
+    await anularVenta(db, r.venta.id);
+    expect(await ventasConPromo(db, combo.id)).toBe(1);
+    const e2 = await borrarPromo(db, combo.id).catch((x: unknown) => x);
+    expect(e2).toBeInstanceOf(PromoEnVentas);
+    expect((e2 as Error).message).toBe('No se puede borrar: se vendió en una venta. Desmarcala como activa en lugar de borrarla.');
+    expect(await listarPromos(db)).toHaveLength(1);
+
+    // A promo never sold can be deleted, and then its products can too (if they aren't in sales).
+    const otra = await guardarPromo(db, nuevaPromo('Otra', 1, [{ productoId: jugo.id, cantidad: 1 }]));
+    const nuevo = await guardarProducto(db, conPrecio('nuevo', 1));
+    await guardarPromo(db, { ...otra, componentes: [{ productoId: nuevo.id, cantidad: 1 }] });
+    await borrarPromo(db, otra.id);
+    await borrarProducto(db, nuevo.id);
+    expect((await listarPromos(db)).map((p) => p.nombre)).toEqual(['Combo']);
   });
 });

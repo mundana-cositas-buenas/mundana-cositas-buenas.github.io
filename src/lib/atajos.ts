@@ -10,8 +10,9 @@ export const ATAJOS: readonly { tecla: string; descripcion: string; atajo: Atajo
   { tecla: 'p', descripcion: 'Ir a Productos', atajo: { tipo: 'ir', hash: '#/stock' } },
   { tecla: 'm', descripcion: 'Ir a Movimientos (registrar entrada o ajuste)', atajo: { tipo: 'ir', hash: '#/stock/movimientos' } },
   { tecla: 'a', descripcion: 'Ir a Alertas de stock', atajo: { tipo: 'ir', hash: '#/stock/alertas' } },
+  { tecla: 'o', descripcion: 'Ir a Promos', atajo: { tipo: 'ir', hash: '#/stock/promos' } },
   { tecla: 'b', descripcion: 'Ir a Backup', atajo: { tipo: 'ir', hash: '#/backup' } },
-  { tecla: 'n', descripcion: 'Nuevo: producto de la venta, insumo, producto, receta, línea de receta o movimiento', atajo: { tipo: 'foco', objetivo: 'nuevo' } },
+  { tecla: 'n', descripcion: 'Nuevo: producto o promo de la venta, insumo, producto, promo, receta, línea de receta o movimiento', atajo: { tipo: 'foco', objetivo: 'nuevo' } },
   { tecla: '/', descripcion: 'Buscar en la lista', atajo: { tipo: 'foco', objetivo: 'buscar' } },
   { tecla: '?', descripcion: 'Mostrar u ocultar esta ayuda', atajo: { tipo: 'ayuda' } },
 ];

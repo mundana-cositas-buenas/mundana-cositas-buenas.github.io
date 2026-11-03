@@ -74,7 +74,7 @@
           {#if m.anuladoEn}
             <span class="muted" title="Anulado el {formatFechaHora(m.anuladoEn)}">anulado</span>
           {:else if m.ventaId}
-            <a href="#/ventas" title="Es parte de una venta: se anula desde Ventas">en venta</a>
+            <a href="#/ventas" title="Es parte de una venta: se anula desde Ventas">{m.promoId ? 'en promo' : 'en venta'}</a>
           {:else}
             <button type="button" class="secundario peligro" onclick={() => anular(m, p)}>Anular</button>
           {/if}

@@ -1,14 +1,22 @@
 // Sales math: pure functions. A sale's lines are 'venta' movements that carry the unit price
-// they were sold at, so later price changes don't rewrite past sales.
+// they were sold at, so later price changes don't rewrite past sales. Promos sold are kept on
+// the sale with their price; their components are movements with a promoId and price 0.
 
 import { leerNumero } from '../lib/campos';
 import type { Centavos } from '../lib/money';
 import { diaLocal } from '../lib/texto';
-import type { Movimiento, Producto, Venta } from './types';
+import { problemaPromo } from './promos';
+import type { Movimiento, Producto, Promo, Venta } from './types';
 
 /** A line of the sale being entered. */
 export interface LineaEnCurso {
   producto: Producto;
+  cantidad: number;
+}
+
+/** A promo line of the sale being entered. */
+export interface PromoEnCurso {
+  promo: Promo;
   cantidad: number;
 }
 
@@ -19,8 +27,9 @@ export interface VentaConLineas {
 }
 
 export interface Totales {
-  subtotal: Centavos;
-  descuento: Centavos;
+  subtotal: Centavos; // of the products sold on their own
+  descuento: Centavos; // over that subtotal only: promos already have their own price
+  promos: Centavos; // of the promos
   total: Centavos;
 }
 
@@ -29,24 +38,37 @@ const redondear = (n: number) => Math.round(n * 1e6) / 1e6;
 /** Line amount in whole cents (quantities can be decimal, e.g. kg). */
 export const importe = (cantidad: number, precioUnitario: Centavos): Centavos => Math.round(cantidad * precioUnitario);
 
-/** subtotal = sum of the line amounts; descuento = subtotal * % / 100, rounded to cents. */
-export function totales(lineas: readonly { cantidad: number; precioUnitario: Centavos }[], descuentoPct: number): Totales {
+/**
+ * subtotal = sum of the product line amounts; descuento = subtotal * % / 100, rounded to cents;
+ * promos = sum of precio * cantidad; total = subtotal - descuento + promos.
+ */
+export function totales(
+  lineas: readonly { cantidad: number; precioUnitario: Centavos }[],
+  descuentoPct: number,
+  promos: readonly { cantidad: number; precio: Centavos }[] = [],
+): Totales {
   const subtotal = lineas.reduce((s, l) => s + importe(l.cantidad, l.precioUnitario), 0);
   const descuento = Math.round((subtotal * descuentoPct) / 100);
-  return { subtotal, descuento, total: subtotal - descuento };
+  const enPromos = promos.reduce((s, p) => s + importe(p.cantidad, p.precio), 0);
+  return { subtotal, descuento, promos: enPromos, total: subtotal - descuento + enPromos };
 }
 
-export function totalesEnCurso(lineas: readonly LineaEnCurso[], descuentoPct: number): Totales {
+export function totalesEnCurso(lineas: readonly LineaEnCurso[], descuentoPct: number, promos: readonly PromoEnCurso[] = []): Totales {
   return totales(
     lineas.map((l) => ({ cantidad: l.cantidad, precioUnitario: l.producto.precioVenta ?? 0 })),
     descuentoPct,
+    promos.map((p) => ({ cantidad: p.cantidad, precio: p.promo.precio })),
   );
 }
 
+/** Product lines of a stored sale: its movements, minus the promo components (their price is in the promo). */
+export const lineasSueltas = (v: VentaConLineas) => v.lineas.filter((m) => m.promoId === undefined);
+
 export function totalesDe(v: VentaConLineas): Totales {
   return totales(
-    v.lineas.map((m) => ({ cantidad: m.cantidad, precioUnitario: m.precioUnitario ?? 0 })),
+    lineasSueltas(v).map((m) => ({ cantidad: m.cantidad, precioUnitario: m.precioUnitario ?? 0 })),
     v.venta.descuentoPct,
+    v.venta.promos ?? [],
   );
 }
 
@@ -68,6 +90,28 @@ export function leerLinea(producto: Producto | undefined, productoTexto: string,
   return { ok: true, linea: { producto, cantidad: c.valor } };
 }
 
+export type PromoLeida = { ok: true; linea: PromoEnCurso } | { ok: false; campo: 'producto' | 'cantidad'; error: string };
+
+/** A promo line to add from the picker: every component still active, and a positive quantity (empty = 1). */
+export function leerPromo(promo: Promo, cantidad: string, productos: ReadonlyMap<string, Producto>): PromoLeida {
+  const problema = problemaPromo(promo, productos);
+  if (problema) return { ok: false, campo: 'producto', error: problema };
+  const c = leerNumero(cantidad.trim() || '1', { mayorQue: 0 });
+  if (!c.ok) return { ok: false, campo: 'cantidad', error: c.error };
+  return { ok: true, linea: { promo, cantidad: c.valor } };
+}
+
+/** Adds a promo line; a promo already in the sale gets the quantity added to its line. */
+export function agregarPromo(promos: readonly PromoEnCurso[], nueva: PromoEnCurso): PromoEnCurso[] {
+  const i = promos.findIndex((p) => p.promo.id === nueva.promo.id);
+  if (i < 0) return [...promos, nueva];
+  return promos.map((p, j) => (j === i ? { ...p, cantidad: redondear(p.cantidad + nueva.cantidad) } : p));
+}
+
+export function quitarPromo(promos: readonly PromoEnCurso[], promoId: string): PromoEnCurso[] {
+  return promos.filter((p) => p.promo.id !== promoId);
+}
+
 /** Adds a line; a product already in the sale gets the quantity added to its line. */
 export function agregarLinea(lineas: readonly LineaEnCurso[], nueva: LineaEnCurso): LineaEnCurso[] {
   const i = lineas.findIndex((l) => l.producto.id === nueva.producto.id);
@@ -79,15 +123,37 @@ export function quitarLinea(lineas: readonly LineaEnCurso[], productoId: string)
   return lineas.filter((l) => l.producto.id !== productoId);
 }
 
-/** Lines whose product would go below zero (only those not already negative, like single movements). */
+/** What the sale takes from each product: its own line plus its share of every promo. */
+export function pedidoPorProducto(
+  lineas: readonly LineaEnCurso[],
+  promos: readonly PromoEnCurso[],
+  productos: ReadonlyMap<string, Producto>,
+): Map<string, { producto: Producto; cantidad: number }> {
+  const pedido = new Map<string, { producto: Producto; cantidad: number }>();
+  const sumar = (producto: Producto | undefined, cantidad: number) => {
+    if (!producto) return;
+    const p = pedido.get(producto.id);
+    pedido.set(producto.id, { producto, cantidad: redondear((p?.cantidad ?? 0) + cantidad) });
+  };
+  for (const l of lineas) sumar(l.producto, l.cantidad);
+  for (const p of promos) for (const c of p.promo.componentes) sumar(productos.get(c.productoId), c.cantidad * p.cantidad);
+  return pedido;
+}
+
+/**
+ * Products that would go below zero (only those not already negative, like single movements),
+ * counting both product lines and promo components.
+ */
 export function quedanNegativos(
   lineas: readonly LineaEnCurso[],
   stock: ReadonlyMap<string, number>,
+  promos: readonly PromoEnCurso[] = [],
+  productos: ReadonlyMap<string, Producto> = new Map(),
 ): { producto: Producto; despues: number }[] {
-  return lineas.flatMap((l) => {
-    const actual = stock.get(l.producto.id) ?? 0;
-    const despues = redondear(actual - l.cantidad);
-    return despues < 0 && actual >= 0 ? [{ producto: l.producto, despues }] : [];
+  return [...pedidoPorProducto(lineas, promos, productos).values()].flatMap(({ producto, cantidad }) => {
+    const actual = stock.get(producto.id) ?? 0;
+    const despues = redondear(actual - cantidad);
+    return despues < 0 && actual >= 0 ? [{ producto, despues }] : [];
   });
 }
 

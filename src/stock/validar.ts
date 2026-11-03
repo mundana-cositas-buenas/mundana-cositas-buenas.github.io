@@ -3,7 +3,7 @@
 import { leerNumero, leerPesos, nombreRepetido, numeroEditable, type Errores, type Validado } from '../lib/campos';
 import { pesosEditable, type Centavos } from '../lib/money';
 import { rentabilidad } from './logic';
-import type { Movimiento, Producto, TipoMovimiento, Venta } from './types';
+import type { ComponentePromo, Movimiento, Producto, Promo, TipoMovimiento, Venta } from './types';
 
 export interface ProductoForm {
   nombre: string;
@@ -111,4 +111,65 @@ export function validarVenta(f: VentaForm): Validado<DatosVenta, VentaForm> {
   const nota = f.nota.trim();
   if (nota) datos.nota = nota;
   return { ok: true, datos };
+}
+
+export interface ComponenteForm {
+  productoId: string;
+  cantidad: string;
+}
+
+export interface PromoForm {
+  nombre: string;
+  precio: string;
+  activo: boolean;
+  componentes: ComponenteForm[];
+}
+
+export const ETIQUETAS_PROMO: Record<keyof PromoForm, string> = {
+  nombre: 'Nombre',
+  precio: 'Precio',
+  activo: 'Activa',
+  componentes: 'Productos',
+};
+
+export type DatosPromo = Omit<Promo, 'id' | 'actualizadoEn'>;
+
+export const promoVacia = (): PromoForm => ({ nombre: '', precio: '', activo: true, componentes: [] });
+
+export function promoFormDesde(p: Promo): PromoForm {
+  return {
+    nombre: p.nombre,
+    precio: pesosEditable(p.precio),
+    activo: p.activo,
+    componentes: p.componentes.map((c) => ({ productoId: c.productoId, cantidad: numeroEditable(c.cantidad) })),
+  };
+}
+
+/** A component's quantity: positive, decimals allowed. */
+export const leerCantidadComponente = (cantidad: string) => leerNumero(cantidad, { mayorQue: 0 });
+
+/** Name required and unique among promos, price required (zero allowed), at least one product, positive quantities. */
+export function validarPromo(f: PromoForm, otrosNombres: readonly string[] = []): Validado<DatosPromo, PromoForm> {
+  const errores: Errores<PromoForm> = {};
+  const nombre = f.nombre.trim();
+  if (!nombre) errores.nombre = 'Requerido';
+  else if (nombreRepetido(nombre, otrosNombres)) errores.nombre = 'Ya existe una promo con ese nombre';
+  const precio = leerPesos(f.precio);
+  if (!precio.ok) errores.precio = precio.error;
+  const componentes: ComponentePromo[] = [];
+  let malas = 0;
+  for (const c of f.componentes) {
+    const n = leerCantidadComponente(c.cantidad);
+    if (!n.ok) malas++;
+    else {
+      // The same product twice is one component with both quantities.
+      const igual = componentes.find((x) => x.productoId === c.productoId);
+      if (igual) igual.cantidad = Math.round((igual.cantidad + n.valor) * 1e6) / 1e6;
+      else componentes.push({ productoId: c.productoId, cantidad: n.valor });
+    }
+  }
+  if (!f.componentes.length) errores.componentes = 'Agregá al menos un producto';
+  else if (malas) errores.componentes = malas === 1 ? 'Hay una cantidad inválida' : `Hay ${malas} cantidades inválidas`;
+  if (Object.keys(errores).length || !precio.ok) return { ok: false, errores };
+  return { ok: true, datos: { nombre, precio: precio.valor, activo: f.activo, componentes } };
 }
