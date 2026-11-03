@@ -147,7 +147,8 @@ describe('ventas', () => {
 
     // Later price changes don't touch the stored price.
     await guardarProducto(db, { ...jugo, precioVenta: 999 });
-    expect((await listarVentas(db))[0].lineas[0].precioUnitario).toBe(150000);
+    const lineaJugo = (await listarVentas(db))[0].lineas.find((m) => m.productoId === jugo.id);
+    expect(lineaJugo?.precioUnitario).toBe(150000);
   });
 
   it('records nothing if a product is missing, has no price, or the sale is empty', async () => {
