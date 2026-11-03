@@ -105,7 +105,7 @@
 />
 
 <header>
-  <a class="marca" href="#/ventas" title="Inicio: ventas">Mundana</a>
+  <a class="marca" href="#/ventas" title="Inicio: ventas">Ona</a>
   <nav>
     {#each SECCIONES as s (s.id)}
       <a href="#/{s.id}" aria-current={seccion === s.id ? 'page' : undefined}>

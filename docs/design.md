@@ -109,7 +109,7 @@ día         = sales grouped by local calendar day; voided sales are listed but 
 - Product deletion is blocked, with a message, when the product is in a sale.
 
 ### Sales (home page)
-- A top-level section, first in the navigation and the page for an empty or unknown hash; the "Mundana" name in the header links to it.
+- A top-level section, first in the navigation and the page for an empty or unknown hash; the "Ona" name in the header links to it.
 - The sale being entered: product (type to pick) + quantity (empty = 1) + Enter adds a line; adding a product already in the sale adds to its quantity; ✕ removes a line. It shows each line's price and amount, subtotal, discount and total. Discount % and an optional note, then "Registrar venta" (Enter in the discount or note also registers). One warning lists every product whose stock would go negative.
 - The draft survives going to other pages (not a reload), and counts as unsaved input for the update notice.
 - Sales by day: one row per day with sales, newest first, with the number of sales and the total; each day expands to its sales (time, products, discount, total, note, "Anular"). Today starts expanded. Voided sales show struck through.
@@ -118,7 +118,7 @@ día         = sales grouped by local calendar day; voided sales are listed but 
 - Per-product movement history, with cancelling.
 
 ### Backup
-- **Export** everything to one JSON file, `mundana-YYYY-MM-DD.json`:
+- **Export** everything to one JSON file, `ona-YYYY-MM-DD.json`:
   `{ formato: 'mundana-backup', version, exportadoEn, datos: { <every data store> } }`.
   `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales.
 - **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale); a movement with a `ventaId` must be a `venta` with a `precioUnitario`. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.

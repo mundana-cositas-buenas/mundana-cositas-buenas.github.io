@@ -7,22 +7,14 @@ import { crc32, deflateSync } from 'node:zlib';
 const FONDO = [0x8a, 0x4b, 0x16]; // --accent
 const LETRA = [0xfa, 0xfa, 0xf7]; // --bg
 
-// Block "M" in a 100×100 box.
-const M = [
-  [24, 72], [24, 28], [34, 28], [50, 51], [66, 28], [76, 28], [76, 72],
-  [66, 72], [66, 45], [54, 63], [46, 63], [34, 45], [34, 72],
-];
+// Ring "O" (for Ona) in a 100×100 box: outer and inner radius around the center.
+const O = { r: 18, ancho: 10 };
 
-const escalar = (pts, f) => pts.map(([x, y]) => [50 + (x - 50) * f, 50 + (y - 50) * f]);
+const escalar = (o, f) => ({ r: o.r * f, ancho: o.ancho * f });
 
-function dentro(pts, x, y) {
-  let d = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const [xi, yi] = pts[i];
-    const [xj, yj] = pts[j];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) d = !d;
-  }
-  return d;
+function dentro({ r, ancho }, x, y) {
+  const d = Math.hypot(x - 50, y - 50);
+  return d <= r + ancho / 2 && d >= r - ancho / 2;
 }
 
 function enRedondeado(x, y, r) {
@@ -83,14 +75,14 @@ function png(tam, rgba) {
 const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
 <rect width="100" height="100" rx="18" fill="${hex(FONDO)}"/>
-<polygon points="${M.map((p) => p.join(',')).join(' ')}" fill="${hex(LETRA)}"/>
+<circle cx="50" cy="50" r="${O.r}" fill="none" stroke="${hex(LETRA)}" stroke-width="${O.ancho}"/>
 </svg>
 `;
 
 const dir = new URL('../public/icons/', import.meta.url);
 mkdirSync(dir, { recursive: true });
-writeFileSync(new URL('icon-192.png', dir), rasterizar(192, 18, M));
-writeFileSync(new URL('icon-512.png', dir), rasterizar(512, 18, M));
+writeFileSync(new URL('icon-192.png', dir), rasterizar(192, 18, O));
+writeFileSync(new URL('icon-512.png', dir), rasterizar(512, 18, O));
 // Maskable: full bleed, letter shrunk into the 80 % safe zone.
-writeFileSync(new URL('maskable-512.png', dir), rasterizar(512, 0, escalar(M, 0.75)));
+writeFileSync(new URL('maskable-512.png', dir), rasterizar(512, 0, escalar(O, 0.75)));
 writeFileSync(new URL('icon.svg', dir), svg);

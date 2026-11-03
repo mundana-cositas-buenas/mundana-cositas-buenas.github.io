@@ -72,10 +72,10 @@ export function serializar(b: Backup): string {
 
 const dos = (n: number) => String(n).padStart(2, '0');
 
-/** `mundana-AAAA-MM-DD.json` (local date), with an optional suffix before the extension. */
+/** `ona-AAAA-MM-DD.json` (local date), with an optional suffix before the extension. */
 export function nombreArchivo(fecha: Date, sufijo = '', ext = 'json'): string {
   const dia = `${fecha.getFullYear()}-${dos(fecha.getMonth() + 1)}-${dos(fecha.getDate())}`;
-  return `mundana-${dia}${sufijo ? `-${sufijo}` : ''}.${ext}`;
+  return `ona-${dia}${sufijo ? `-${sufijo}` : ''}.${ext}`;
 }
 
 export function contarBackup(b: Backup): Conteo {
@@ -218,7 +218,7 @@ export function leerBackup(contenido: string): Lectura {
   } catch {
     return { ok: false, errores: ['El archivo no es un JSON válido.'] };
   }
-  if (!esObjeto(json) || json.formato !== FORMATO) return { ok: false, errores: ['El archivo no es un backup de Mundana.'] };
+  if (!esObjeto(json) || json.formato !== FORMATO) return { ok: false, errores: ['El archivo no es un backup de Ona.'] };
   const v = json.version;
   if (!Number.isInteger(v) || (v as number) < 1) return { ok: false, errores: ['El backup no tiene una versión válida.'] };
   if ((v as number) > VERSION) {

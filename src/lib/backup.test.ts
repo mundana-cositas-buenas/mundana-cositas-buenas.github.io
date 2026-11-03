@@ -189,8 +189,8 @@ describe('leerBackup', () => {
 
   it('rejects malformed JSON and foreign files', () => {
     expect(errores('{nope')).toEqual(['El archivo no es un JSON válido.']);
-    expect(errores('[]')).toEqual(['El archivo no es un backup de Mundana.']);
-    expect(errores(json((b) => (b.formato = 'otro')))).toEqual(['El archivo no es un backup de Mundana.']);
+    expect(errores('[]')).toEqual(['El archivo no es un backup de Ona.']);
+    expect(errores(json((b) => (b.formato = 'otro')))).toEqual(['El archivo no es un backup de Ona.']);
   });
 
   it('rejects unknown versions', () => {
@@ -340,8 +340,8 @@ describe('último backup', () => {
 
 describe('nombreArchivo', () => {
   it('uses the local date', () => {
-    expect(nombreArchivo(new Date(2026, 2, 5, 23, 59))).toBe('mundana-2026-03-05.json');
-    expect(nombreArchivo(new Date(2026, 11, 31), 'antes-de-importar')).toBe('mundana-2026-12-31-antes-de-importar.json');
-    expect(nombreArchivo(new Date(2026, 0, 2), 'productos', 'csv')).toBe('mundana-2026-01-02-productos.csv');
+    expect(nombreArchivo(new Date(2026, 2, 5, 23, 59))).toBe('ona-2026-03-05.json');
+    expect(nombreArchivo(new Date(2026, 11, 31), 'antes-de-importar')).toBe('ona-2026-12-31-antes-de-importar.json');
+    expect(nombreArchivo(new Date(2026, 0, 2), 'productos', 'csv')).toBe('ona-2026-01-02-productos.csv');
   });
 });
