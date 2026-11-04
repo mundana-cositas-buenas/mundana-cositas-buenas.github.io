@@ -16,3 +16,6 @@
   * cada tanto tiempo de inactividad, estaría bueno mostrar una pantalla de bloqueo de la app
   * que pida un password para volver a usarla
   * la password la setea el usuario, si está seteada se activa la lock screen, sino no
+
+* agregar una nueva sección que sea Empleados
+  * para que los empleados puedan manejar/agregar las horas trabajadas
