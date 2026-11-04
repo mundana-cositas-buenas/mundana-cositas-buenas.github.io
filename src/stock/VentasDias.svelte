@@ -3,20 +3,22 @@
   import { formatNumero, formatPesos } from '../lib/money';
   import { diaLocal, formatFechaHora, formatHora } from '../lib/texto';
   import { anularVenta, borrarVenta } from './repo';
-  import type { Producto } from './types';
+  import type { Categoria, Producto } from './types';
   import { nombreEnVenta } from './promos';
-  import { lineasSueltas, totalesDe, ventasPorDia, type VentaConLineas } from './ventas';
+  import { lineasSueltas, totalesDe, ventasPorCategoria, ventasPorDia, type VentaConLineas } from './ventas';
 
   let {
     db,
     ventas,
     productos,
+    categorias,
     onanulada,
     onborrada,
   }: {
     db: DB;
     ventas: VentaConLineas[];
     productos: Producto[];
+    categorias: Categoria[];
     onanulada: (v: VentaConLineas) => void;
     onborrada: (id: string) => void;
   } = $props();
@@ -96,8 +98,27 @@
         </td>
       </tr>
       {#if abierto}
+        {@const porCategoria = ventasPorCategoria(d.ventas, productos, categorias)}
         <tr class="historial">
           <td colspan="4">
+            {#if porCategoria.length}
+              <table class="tabla compacta por-categoria">
+                <thead>
+                  <tr>
+                    <th>Categoría</th>
+                    <th class="num">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each porCategoria as c (c.categoria?.id ?? c.tipo)}
+                    <tr>
+                      <td>{c.tipo === 'categoria' ? c.categoria!.nombre : c.tipo === 'promos' ? 'Promos' : 'Sin categoría'}</td>
+                      <td class="num">{formatPesos(c.total)}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
             <table class="tabla">
               <thead>
                 <tr>

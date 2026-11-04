@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import { describirErrores, type Errores } from '../lib/campos';
   import { formatNumero } from '../lib/money';
-  import type { Producto, Proveedor } from './types';
+  import type { Categoria, Producto, Proveedor } from './types';
   import { avisosProducto, ETIQUETAS_PRODUCTO, productoFormDesde, productoVacio, validarProducto, type DatosProducto, type ProductoForm } from './validar';
 
   let {
@@ -10,6 +10,7 @@
     stock,
     otrosNombres,
     proveedores,
+    categorias,
     onguardar,
     oncancelar,
     enfocar = false,
@@ -18,6 +19,7 @@
     stock?: number;
     otrosNombres: string[];
     proveedores: Proveedor[];
+    categorias: Categoria[];
     onguardar: (datos: DatosProducto) => Promise<void>;
     oncancelar?: () => void;
     enfocar?: boolean;
@@ -60,7 +62,8 @@
     try {
       await onguardar(v.datos);
       if (!inicial) {
-        form = productoVacio();
+        // Keep the category: products are often entered several of the same kind in a row.
+        form = { ...productoVacio(), categoriaId: form.categoriaId };
         intentado = false;
         nombreInput?.focus();
       }
@@ -83,7 +86,7 @@
 </script>
 
 <tr class="editando" bind:this={fila} onkeydown={teclas}>
-  <td>
+  <td class="apilado">
     <input
       bind:this={nombreInput}
       bind:value={form.nombre}
@@ -93,6 +96,12 @@
       aria-invalid={!!errores.nombre}
       title={errores.nombre}
     />
+    <select bind:value={form.categoriaId} aria-label="Categoría" aria-invalid={!!errores.categoriaId} title={errores.categoriaId}>
+      <option value="">{categorias.length ? 'Categoría…' : 'Sin categorías'}</option>
+      {#each categorias as c (c.id)}
+        <option value={c.id}>{c.nombre}</option>
+      {/each}
+    </select>
   </td>
   <td>
     <select bind:value={form.proveedorId} aria-label="Proveedor" aria-invalid={!!errores.proveedorId} title={errores.proveedorId}>

@@ -4,7 +4,7 @@ import { leerNumero, leerPesos, MONTO_INVALIDO, nombreRepetido, numeroEditable, 
 import { parsePesos, pesosEditable, type Centavos } from '../lib/money';
 import { rentabilidad } from './logic';
 import { MEDIOS_PAGO, PLAZO_DEFAULT } from './proveedores';
-import type { ComponentePromo, MedioPago, Movimiento, OperacionProveedor, Producto, Promo, Proveedor, TipoMovimiento, TipoOperacion, Venta } from './types';
+import type { Categoria, ComponentePromo, MedioPago, Movimiento, OperacionProveedor, Producto, Promo, Proveedor, TipoMovimiento, TipoOperacion, Venta } from './types';
 
 export interface ProductoForm {
   nombre: string;
@@ -14,6 +14,7 @@ export interface ProductoForm {
   precioVenta: string;
   activo: boolean;
   proveedorId: string; // '' = none chosen
+  categoriaId: string; // '' = none chosen
 }
 
 export const ETIQUETAS_PRODUCTO: Record<keyof ProductoForm, string> = {
@@ -24,10 +25,15 @@ export const ETIQUETAS_PRODUCTO: Record<keyof ProductoForm, string> = {
   precioVenta: 'Precio de venta',
   activo: 'Activo',
   proveedorId: 'Proveedor',
+  categoriaId: 'Categoría',
 };
 
-// Old products may lack a sale price or a supplier, but every save sets both.
-export type DatosProducto = Omit<Producto, 'id' | 'actualizadoEn' | 'precioVenta' | 'proveedorId'> & { precioVenta: Centavos; proveedorId: string };
+// Old products may lack a sale price, a supplier or a category, but every save sets them.
+export type DatosProducto = Omit<Producto, 'id' | 'actualizadoEn' | 'precioVenta' | 'proveedorId' | 'categoriaId'> & {
+  precioVenta: Centavos;
+  proveedorId: string;
+  categoriaId: string;
+};
 
 export const productoVacio = (): ProductoForm => ({
   nombre: '',
@@ -37,6 +43,7 @@ export const productoVacio = (): ProductoForm => ({
   precioVenta: '',
   activo: true,
   proveedorId: '',
+  categoriaId: '',
 });
 
 export function productoFormDesde(p: Producto): ProductoForm {
@@ -48,12 +55,13 @@ export function productoFormDesde(p: Producto): ProductoForm {
     precioVenta: p.precioVenta === undefined ? '' : pesosEditable(p.precioVenta),
     activo: p.activo,
     proveedorId: p.proveedorId ?? '',
+    categoriaId: p.categoriaId ?? '',
   };
 }
 
 /**
  * Empty unit means "u", empty minimum means 0, empty cost means none; the sale price is required
- * (zero allowed), and so is the supplier.
+ * (zero allowed), and so are the supplier and the category.
  */
 export function validarProducto(f: ProductoForm, otrosNombres: readonly string[] = []): Validado<DatosProducto, ProductoForm> {
   const errores: Errores<ProductoForm> = {};
@@ -67,6 +75,7 @@ export function validarProducto(f: ProductoForm, otrosNombres: readonly string[]
   const precio = leerPesos(f.precioVenta);
   if (!precio.ok) errores.precioVenta = precio.error;
   if (!f.proveedorId) errores.proveedorId = 'Elegí un proveedor';
+  if (!f.categoriaId) errores.categoriaId = 'Elegí una categoría';
   if (Object.keys(errores).length || !minimo.ok || (costo && !costo.ok) || !precio.ok) return { ok: false, errores };
   const datos: DatosProducto = {
     nombre,
@@ -75,6 +84,7 @@ export function validarProducto(f: ProductoForm, otrosNombres: readonly string[]
     precioVenta: precio.valor,
     activo: f.activo,
     proveedorId: f.proveedorId,
+    categoriaId: f.categoriaId,
   };
   if (costo) datos.costo = costo.valor;
   return { ok: true, datos };
@@ -84,6 +94,21 @@ export function validarProducto(f: ProductoForm, otrosNombres: readonly string[]
 export function avisosProducto(d: DatosProducto): Errores<ProductoForm> {
   const r = rentabilidad(d);
   return r && r.ganancia < 0 ? { costo: 'Es mayor que el precio de venta' } : {};
+}
+
+export interface CategoriaForm {
+  nombre: string;
+}
+
+export const ETIQUETAS_CATEGORIA: Record<keyof CategoriaForm, string> = { nombre: 'Nombre' };
+
+export type DatosCategoria = Omit<Categoria, 'id' | 'actualizadoEn'>;
+
+export function validarCategoria(f: CategoriaForm, otrosNombres: readonly string[] = []): Validado<DatosCategoria, CategoriaForm> {
+  const nombre = f.nombre.trim();
+  if (!nombre) return { ok: false, errores: { nombre: 'Requerido' } };
+  if (nombreRepetido(nombre, otrosNombres)) return { ok: false, errores: { nombre: 'Ya existe una categoría con ese nombre' } };
+  return { ok: true, datos: { nombre } };
 }
 
 export const TIPOS: readonly { id: TipoMovimiento; titulo: string }[] = [

@@ -19,6 +19,7 @@ export type StoreName =
   | 'promos'
   | 'proveedores'
   | 'operacionesProveedor'
+  | 'categorias'
   | 'meta';
 
 export const DB_NAME = 'mundana';
@@ -64,6 +65,11 @@ export const MIGRATIONS: readonly Migration[] = [
     db.createObjectStore('proveedores', { keyPath: 'id' });
     db.createObjectStore('operacionesProveedor', { keyPath: 'id' }).createIndex('proveedorId', 'proveedorId');
     tx.objectStore('movimientos').createIndex('proveedorId', 'proveedorId');
+  },
+  // Product categories.
+  (db, tx) => {
+    db.createObjectStore('categorias', { keyPath: 'id' });
+    tx.objectStore('productos').createIndex('categoriaId', 'categoriaId');
   },
 ];
 

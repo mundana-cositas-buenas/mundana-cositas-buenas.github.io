@@ -26,6 +26,7 @@ describe('openDB', () => {
     expect(db.version).toBe(DB_VERSION);
     expect([...db.idb.objectStoreNames].sort()).toEqual(
       [
+        'categorias',
         'historialPrecios',
         'insumos',
         'meta',
@@ -45,6 +46,21 @@ describe('openDB', () => {
     expect([...movs.indexNames].sort()).toEqual(['productoId', 'proveedorId', 'ventaId']);
     const ops = db.idb.transaction('operacionesProveedor').objectStore('operacionesProveedor');
     expect([...ops.indexNames]).toEqual(['proveedorId']);
+    const productos = db.idb.transaction('productos').objectStore('productos');
+    expect([...productos.indexNames]).toEqual(['categoriaId']);
+  });
+
+  it('v7 adds categories and keeps the existing products', async () => {
+    const name = `v7-${n++}`;
+    const viejo = await openDB(name, MIGRATIONS.slice(0, 6));
+    await viejo.put('productos', { id: 'p1', actualizadoEn: '', nombre: 'Miel', unidad: 'u', stockMinimo: 0, activo: true, proveedorId: 'pv' });
+    viejo.close();
+    const db = await openDB(name);
+    expect(db.version).toBe(DB_VERSION);
+    expect(await db.list('categorias')).toEqual([]);
+    expect((await db.list('productos')).map((p) => p.id)).toEqual(['p1']);
+    expect(await db.listBy('productos', 'categoriaId', 'x')).toEqual([]);
+    db.close();
   });
 
   it('v6 adds suppliers and keeps the existing products and movements', async () => {
@@ -54,7 +70,7 @@ describe('openDB', () => {
     await viejo.put('movimientos', { id: 'm1', actualizadoEn: '', productoId: 'p1', tipo: 'entrada', cantidad: 1, fecha: '' });
     viejo.close();
     const db = await openDB(name);
-    expect(db.version).toBe(6);
+    expect(db.version).toBe(DB_VERSION);
     expect(await db.list('proveedores')).toEqual([]);
     expect((await db.list('productos')).map((p) => p.id)).toEqual(['p1']);
     expect(await db.listBy('movimientos', 'proveedorId', 'x')).toEqual([]);

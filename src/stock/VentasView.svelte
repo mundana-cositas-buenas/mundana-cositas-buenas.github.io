@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { DB } from '../lib/db';
   import type { Ediciones } from '../pwa/ediciones';
-  import { listarProductos, listarPromos, listarVentas, stockActualDe } from './repo';
-  import type { Producto, Promo } from './types';
+  import { listarCategorias, listarProductos, listarPromos, listarVentas, stockActualDe } from './repo';
+  import type { Categoria, Producto, Promo } from './types';
   import VentaEnCurso from './VentaEnCurso.svelte';
   import VentasDias from './VentasDias.svelte';
   import type { VentaConLineas } from './ventas';
@@ -11,12 +11,19 @@
 
   let productos = $state<Producto[]>([]);
   let promos = $state<Promo[]>([]);
+  let categorias = $state<Categoria[]>([]);
   let stock = $state(new Map<string, number>());
   let ventas = $state<VentaConLineas[]>([]);
   let cargando = $state(true);
 
   async function cargar() {
-    [productos, promos, stock, ventas] = await Promise.all([listarProductos(db), listarPromos(db), stockActualDe(db), listarVentas(db)]);
+    [productos, promos, stock, ventas, categorias] = await Promise.all([
+      listarProductos(db),
+      listarPromos(db),
+      stockActualDe(db),
+      listarVentas(db),
+      listarCategorias(db),
+    ]);
     cargando = false;
   }
   cargar();
@@ -53,6 +60,6 @@
   {#if !ventas.length}
     <p class="muted">Todavía no hay ventas.</p>
   {:else}
-    <VentasDias {db} {ventas} {productos} onanulada={anulada} onborrada={borrada} />
+    <VentasDias {db} {ventas} {productos} {categorias} onanulada={anulada} onborrada={borrada} />
   {/if}
 {/if}

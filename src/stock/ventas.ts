@@ -6,7 +6,7 @@ import { leerNumero } from '../lib/campos';
 import type { Centavos } from '../lib/money';
 import { diaLocal } from '../lib/texto';
 import { problemaPromo } from './promos';
-import type { Movimiento, Producto, Promo, Venta } from './types';
+import type { Categoria, Movimiento, Producto, Promo, Venta } from './types';
 
 /** A line of the sale being entered. */
 export interface LineaEnCurso {
@@ -189,4 +189,67 @@ export function ventasPorDia(ventas: readonly VentaConLineas[]): Dia[] {
     }
   }
   return [...dias.values()].sort((a, b) => b.dia.localeCompare(a.dia));
+}
+
+/**
+ * Splits `total` (whole cents) in proportion to `pesos`, so the parts add up exactly to it:
+ * each part is rounded down and the cents left go to the largest remainders.
+ */
+export function repartir(total: Centavos, pesos: readonly Centavos[]): Centavos[] {
+  const suma = pesos.reduce((s, p) => s + p, 0);
+  if (!suma) return pesos.map(() => 0);
+  const exactos = pesos.map((p) => (total * p) / suma);
+  const partes = exactos.map(Math.floor);
+  let resto = total - partes.reduce((s, p) => s + p, 0);
+  const orden = exactos.map((e, i) => ({ i, frac: e - Math.floor(e) })).sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (const { i } of orden) {
+    if (resto <= 0) break;
+    partes[i]++;
+    resto--;
+  }
+  return partes;
+}
+
+export interface VentaCategoria {
+  tipo: 'categoria' | 'sin' | 'promos'; // 'sin': products without a category (or deleted ones)
+  categoria?: Categoria; // on 'categoria' rows
+  total: Centavos;
+}
+
+/**
+ * What the sales that count (not voided) took in, by the products' current category: each
+ * sale's discount is split among its categories in proportion to their amounts, and promos are
+ * their own row, so the rows add up to the sales' total. Categories by name, then "sin", then promos.
+ */
+export function ventasPorCategoria(
+  ventas: readonly VentaConLineas[],
+  productos: readonly Producto[],
+  categorias: readonly Categoria[],
+): VentaCategoria[] {
+  const deProducto = new Map(productos.map((p) => [p.id, p.categoriaId]));
+  const porId = new Map(categorias.map((c) => [c.id, c]));
+  const SIN = '';
+  const totalesPor = new Map<string, Centavos>();
+  let promos: Centavos | undefined;
+  for (const v of ventas) {
+    if (v.venta.anuladoEn) continue;
+    const montos = new Map<string, Centavos>();
+    for (const m of lineasSueltas(v)) {
+      const id = deProducto.get(m.productoId);
+      const clave = id && porId.has(id) ? id : SIN;
+      montos.set(clave, (montos.get(clave) ?? 0) + importe(m.cantidad, m.precioUnitario ?? 0));
+    }
+    const t = totalesDe(v);
+    const claves = [...montos.keys()];
+    const descuentos = repartir(t.descuento, [...montos.values()]);
+    claves.forEach((k, i) => totalesPor.set(k, (totalesPor.get(k) ?? 0) + montos.get(k)! - descuentos[i]));
+    if (v.venta.promos?.length) promos = (promos ?? 0) + t.promos;
+  }
+  const filas: VentaCategoria[] = [...totalesPor]
+    .filter(([k]) => k !== SIN)
+    .map(([k, total]) => ({ tipo: 'categoria' as const, categoria: porId.get(k)!, total }))
+    .sort((a, b) => a.categoria.nombre.localeCompare(b.categoria.nombre, 'es', { sensitivity: 'base' }));
+  if (totalesPor.has(SIN)) filas.push({ tipo: 'sin', total: totalesPor.get(SIN)! });
+  if (promos !== undefined) filas.push({ tipo: 'promos', total: promos });
+  return filas;
 }

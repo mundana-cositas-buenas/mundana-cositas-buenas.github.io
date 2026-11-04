@@ -588,3 +588,31 @@ kbd {
     background: none;
   }
 }
+
+/* A table cell with its fields one under the other (product name and category). */
+.tabla td.apilado input,
+.tabla td.apilado select {
+  display: block;
+}
+
+.tabla td.apilado select {
+  margin-top: 0.25rem;
+}
+
+/* Header row of a group of rows (products by category). */
+.tabla tr.grupo th {
+  padding-top: 1rem;
+  color: var(--fg);
+  font-size: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabla tr.grupo th .muted {
+  font-weight: 400;
+  font-size: 0.85rem;
+  margin-left: 0.75rem;
+}
+
+.tabla.por-categoria {
+  margin-bottom: 0.75rem;
+}

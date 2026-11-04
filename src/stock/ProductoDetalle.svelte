@@ -4,14 +4,15 @@
   import { historial, nivel, rentabilidad, stockActual, valorStock } from './logic';
   import MovimientoRapido from './MovimientoRapido.svelte';
   import MovimientosTabla from './MovimientosTabla.svelte';
-  import { listarProveedores, movimientosDe, obtenerProducto } from './repo';
-  import type { Movimiento, Producto, Proveedor } from './types';
+  import { listarCategorias, listarProveedores, movimientosDe, obtenerProducto } from './repo';
+  import type { Categoria, Movimiento, Producto, Proveedor } from './types';
 
   let { db, id }: { db: DB; id: string } = $props();
 
   let producto = $state<Producto | undefined>();
   let movimientos = $state<Movimiento[]>([]);
   let proveedores = $state<Proveedor[]>([]);
+  let categorias = $state<Categoria[]>([]);
   let cargando = $state(true);
 
   const stock = $derived(stockActual(movimientos));
@@ -19,11 +20,17 @@
   const filas = $derived(historial(movimientos));
   const renta = $derived(producto && rentabilidad(producto));
   const valor = $derived(producto && valorStock(stock, producto.costo));
+  const categoria = $derived(producto?.categoriaId ? categorias.find((c) => c.id === producto!.categoriaId) : undefined);
   const proveedor = $derived(producto?.proveedorId ? proveedores.find((p) => p.id === producto!.proveedorId) : undefined);
 
   async function cargar(id: string) {
     cargando = true;
-    [producto, movimientos, proveedores] = await Promise.all([obtenerProducto(db, id), movimientosDe(db, id), listarProveedores(db)]);
+    [producto, movimientos, proveedores, categorias] = await Promise.all([
+      obtenerProducto(db, id),
+      movimientosDe(db, id),
+      listarProveedores(db),
+      listarCategorias(db),
+    ]);
     cargando = false;
   }
   $effect(() => {
@@ -39,6 +46,8 @@
   <p><a href="#/stock">← Productos</a></p>
   <h2>{producto.nombre}{#if !producto.activo} <span class="muted">(inactivo)</span>{/if}</h2>
   <dl class="resumen">
+    <dt>Categoría</dt>
+    <dd>{#if categoria}{categoria.nombre}{:else}<span class="aviso">Sin categoría</span>{/if}</dd>
     <dt>Proveedor</dt>
     <dd>{#if proveedor}<a href="#/proveedores/{proveedor.id}">{proveedor.nombre}</a>{:else}<span class="aviso">Sin proveedor</span>{/if}</dd>
     <dt>Stock</dt>

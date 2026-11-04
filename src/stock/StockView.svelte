@@ -2,6 +2,7 @@
   import type { DB } from '../lib/db';
   import type { Ediciones } from '../pwa/ediciones';
   import AlertasView from './AlertasView.svelte';
+  import CategoriasView from './CategoriasView.svelte';
   import MovimientosView from './MovimientosView.svelte';
   import ProductoDetalle from './ProductoDetalle.svelte';
   import ProductosView from './ProductosView.svelte';
@@ -11,7 +12,7 @@
   let { db, ruta, alertas, ediciones }: { db: DB; ruta: string[]; alertas: number; ediciones: Ediciones } = $props();
 
   const vista = $derived(
-    ruta[0] === 'movimientos' || ruta[0] === 'alertas' || ruta[0] === 'promos'
+    ruta[0] === 'movimientos' || ruta[0] === 'alertas' || ruta[0] === 'promos' || ruta[0] === 'categorias'
       ? ruta[0]
       : (ruta[0] === 'producto' || ruta[0] === 'promo') && ruta[1]
         ? ruta[0]
@@ -23,6 +24,7 @@
   <h1>Stock</h1>
   <nav class="sub" aria-label="Stock">
     <a href="#/stock" aria-current={vista === 'productos' || vista === 'producto' ? 'page' : undefined}>Productos</a>
+    <a href="#/stock/categorias" aria-current={vista === 'categorias' ? 'page' : undefined}>Categorías</a>
     <a href="#/stock/promos" aria-current={vista === 'promos' || vista === 'promo' ? 'page' : undefined}>Promos</a>
     <a href="#/stock/movimientos" aria-current={vista === 'movimientos' ? 'page' : undefined}>Movimientos</a>
     <a href="#/stock/alertas" aria-current={vista === 'alertas' ? 'page' : undefined}>
@@ -37,6 +39,8 @@
   <AlertasView {db} />
 {:else if vista === 'producto'}
   <ProductoDetalle {db} id={ruta[1]} />
+{:else if vista === 'categorias'}
+  <CategoriasView {db} />
 {:else if vista === 'promos'}
   <PromosView {db} />
 {:else if vista === 'promo'}

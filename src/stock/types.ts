@@ -9,6 +9,12 @@ export interface Producto extends Registro {
   precioVenta?: Centavos;
   activo: boolean;
   proveedorId?: string; // required by validarProducto; older products have none ("Sin proveedor")
+  categoriaId?: string; // required by validarProducto; older products have none ("Sin categoría")
+}
+
+/** A product group, to see products and sales by category. Promos have none. */
+export interface Categoria extends Registro {
+  nombre: string; // unique among categories
 }
 
 export type TipoMovimiento = 'entrada' | 'venta' | 'ajuste';

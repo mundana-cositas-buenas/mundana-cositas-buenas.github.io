@@ -10,23 +10,27 @@ import {
   validarOperacion,
   validarProveedor,
   type OperacionForm,
-  productoFormDesde, productoVacio, TIPOS_RAPIDOS, validarMovimiento, validarProducto, validarVenta, type MovimientoForm, type PromoForm } from './validar';
+  productoFormDesde, productoVacio, validarCategoria, TIPOS_RAPIDOS, validarMovimiento, validarProducto, validarVenta, type MovimientoForm, type PromoForm } from './validar';
 
-// A product form with a supplier chosen, the only way to save one.
-const vacio = () => ({ ...productoVacio(), proveedorId: 'pv' });
+// A product form with a supplier and a category chosen, the only way to save one.
+const vacio = () => ({ ...productoVacio(), proveedorId: 'pv', categoriaId: 'c' });
 
 describe('validarProducto', () => {
   it('fills defaults for empty optional fields', () => {
     expect(validarProducto({ ...vacio(), nombre: ' Vino ', precioVenta: '1500' })).toEqual({
       ok: true,
-      datos: { nombre: 'Vino', unidad: 'u', stockMinimo: 0, precioVenta: 150000, activo: true, proveedorId: 'pv' },
+      datos: { nombre: 'Vino', unidad: 'u', stockMinimo: 0, precioVenta: 150000, activo: true, proveedorId: 'pv', categoriaId: 'c' },
     });
   });
 
-  it('requires a supplier', () => {
+  it('requires a supplier and a category', () => {
     expect(validarProducto({ ...productoVacio(), nombre: 'Vino', precioVenta: '1' })).toEqual({
       ok: false,
-      errores: { proveedorId: 'Elegí un proveedor' },
+      errores: { proveedorId: 'Elegí un proveedor', categoriaId: 'Elegí una categoría' },
+    });
+    expect(validarProducto({ ...vacio(), categoriaId: '', nombre: 'Vino', precioVenta: '1' })).toEqual({
+      ok: false,
+      errores: { categoriaId: 'Elegí una categoría' },
     });
   });
 
@@ -37,18 +41,19 @@ describe('validarProducto', () => {
     expect(validarProducto({ ...vacio(), nombre: 'Vino', precioVenta: '0' })).toMatchObject({ ok: true, datos: { precioVenta: 0 } });
   });
 
-  it('asks an old product without a price or a supplier for them when edited', () => {
+  it('asks an old product without a price, a supplier or a category for them when edited', () => {
     const viejo: Producto = { id: 'p', actualizadoEn: '', nombre: 'Miel', unidad: 'u', stockMinimo: 0, activo: true };
     expect(productoFormDesde(viejo).precioVenta).toBe('');
     expect(productoFormDesde(viejo).proveedorId).toBe('');
+    expect(productoFormDesde(viejo).categoriaId).toBe('');
     expect(validarProducto(productoFormDesde(viejo))).toEqual({
       ok: false,
-      errores: { precioVenta: 'Requerido', proveedorId: 'Elegí un proveedor' },
+      errores: { precioVenta: 'Requerido', proveedorId: 'Elegí un proveedor', categoriaId: 'Elegí una categoría' },
     });
   });
 
   it('round-trips through the form', () => {
-    const p: Producto = { id: 'p', actualizadoEn: '', nombre: 'Queso', unidad: 'kg', stockMinimo: 1.5, costo: 800000, precioVenta: 1234550, activo: false, proveedorId: 'pv' };
+    const p: Producto = { id: 'p', actualizadoEn: '', nombre: 'Queso', unidad: 'kg', stockMinimo: 1.5, costo: 800000, precioVenta: 1234550, activo: false, proveedorId: 'pv', categoriaId: 'c' };
     expect(productoFormDesde(p)).toEqual({
       nombre: 'Queso',
       unidad: 'kg',
@@ -57,10 +62,11 @@ describe('validarProducto', () => {
       precioVenta: '12345,50',
       activo: false,
       proveedorId: 'pv',
+      categoriaId: 'c',
     });
     expect(validarProducto(productoFormDesde(p))).toEqual({
       ok: true,
-      datos: { nombre: 'Queso', unidad: 'kg', stockMinimo: 1.5, costo: 800000, precioVenta: 1234550, activo: false, proveedorId: 'pv' },
+      datos: { nombre: 'Queso', unidad: 'kg', stockMinimo: 1.5, costo: 800000, precioVenta: 1234550, activo: false, proveedorId: 'pv', categoriaId: 'c' },
     });
   });
 
@@ -84,7 +90,7 @@ describe('validarProducto', () => {
 });
 
 describe('avisosProducto', () => {
-  const datos = { nombre: 'Vino', unidad: 'u', stockMinimo: 0, precioVenta: 1000, activo: true, proveedorId: 'pv' };
+  const datos = { nombre: 'Vino', unidad: 'u', stockMinimo: 0, precioVenta: 1000, activo: true, proveedorId: 'pv', categoriaId: 'c' };
 
   it('warns when the cost is over the sale price, without blocking the save', () => {
     const v = validarProducto({ ...vacio(), nombre: 'Vino', costo: '1500', precioVenta: '1000' });
@@ -96,6 +102,14 @@ describe('avisosProducto', () => {
     expect(avisosProducto({ ...datos, costo: 1000 })).toEqual({});
     expect(avisosProducto({ ...datos, costo: 1000, precioVenta: 1500 })).toEqual({});
     expect(avisosProducto(datos)).toEqual({});
+  });
+});
+
+describe('validarCategoria', () => {
+  it('trims the name and requires it, unique ignoring case and accents', () => {
+    expect(validarCategoria({ nombre: ' Bebidas ' })).toEqual({ ok: true, datos: { nombre: 'Bebidas' } });
+    expect(validarCategoria({ nombre: '  ' })).toEqual({ ok: false, errores: { nombre: 'Requerido' } });
+    expect(validarCategoria({ nombre: 'bebidas' }, ['Bebidas'])).toEqual({ ok: false, errores: { nombre: 'Ya existe una categoría con ese nombre' } });
   });
 });
 

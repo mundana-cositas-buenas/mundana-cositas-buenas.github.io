@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Insumo, LineaCostoFijo, LineaInsumo, PrecioHistorico, Receta } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
-import type { Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
+import type { Categoria, Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
 import {
   backupVencido,
   cambiosBackup,
@@ -61,7 +61,8 @@ const lineaInsumo: LineaInsumo = {
   mermaPct: 0,
 };
 const lineaFija: LineaCostoFijo = { id: 'l2', actualizadoEn: T, recetaId: 'r1', orden: 1, tipo: 'costoFijo', descripcion: 'Gas', monto: 5000 };
-const producto: Producto = { id: 'p1', actualizadoEn: T, nombre: 'Miel', unidad: 'frasco', stockMinimo: 2, costo: 120000, activo: true, proveedorId: 'pv1' };
+const producto: Producto = { id: 'p1', actualizadoEn: T, nombre: 'Miel', unidad: 'frasco', stockMinimo: 2, costo: 120000, activo: true, proveedorId: 'pv1', categoriaId: 'c1' };
+const categoria: Categoria = { id: 'c1', actualizadoEn: T, nombre: 'Almacén' };
 const proveedor: Proveedor = { id: 'pv1', actualizadoEn: T, nombre: 'Apícola Sur', plazoDias: 15, activo: true, telefono: '099 123 456', rut: '21', cuenta: '001-2' };
 const operaciones: OperacionProveedor[] = [
   { id: 'o1', actualizadoEn: T, proveedorId: 'pv1', tipo: 'compra', importe: 500000, fecha: T, nota: 'factura 12' },
@@ -101,6 +102,7 @@ const backup = (): Backup => ({
     movimientos: structuredClone(movs),
     proveedores: [structuredClone(proveedor)],
     operacionesProveedor: structuredClone(operaciones),
+    categorias: [structuredClone(categoria)],
   },
 });
 
@@ -127,7 +129,7 @@ describe('exportar / importar', () => {
     const antes = await exportar(db, new Date(T));
 
     const texto = serializar(antes);
-    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], promos: [], ventas: [], movimientos: [], proveedores: [], operacionesProveedor: [] } });
+    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], promos: [], ventas: [], movimientos: [], proveedores: [], operacionesProveedor: [], categorias: [] } });
     expect(Object.values(await contar(db)).every((c) => c === 0)).toBe(true);
 
     const r = leerBackup(texto);
@@ -153,6 +155,7 @@ describe('exportar / importar', () => {
       recetas: 1,
       recetaLineas: 2,
       proveedores: 1,
+      categorias: 1,
       productos: 1,
       promos: 1,
       ventas: 1,
@@ -352,6 +355,30 @@ describe('leerBackup', () => {
     // From version 5 on the lists are required.
     expect(errores(json((b) => delete b.datos.proveedores))).toContain('Proveedores: falta la lista.');
     expect(errores(json((b) => delete b.datos.operacionesProveedor))).toContain('Operaciones con proveedores: falta la lista.');
+  });
+
+  it('upgrades version 5 files, which had no categories', () => {
+    const r = leerBackup(
+      json((b) => {
+        b.version = 5;
+        delete b.datos.categorias;
+        delete b.datos.productos[0].categoriaId;
+      }),
+    );
+    expect(r.ok && r.backup.version).toBe(VERSION);
+    expect(r.ok && r.backup.datos.categorias).toEqual([]);
+    // From version 6 on the list is required.
+    expect(errores(json((b) => delete b.datos.categorias))).toContain('Categorías: falta la lista.');
+  });
+
+  it('checks categories and the products that refer to them', () => {
+    expect(errores(json((b) => (b.datos.categorias[0].nombre = 3)))).toEqual(['Categorías, registro 1: "nombre" falta o es inválido.']);
+    expect(errores(json((b) => (b.datos.productos[0].categoriaId = 7)))).toEqual(['Productos, registro 1: "categoriaId" falta o es inválido.']);
+    expect(errores(json((b) => (b.datos.categorias = [])))).toEqual([
+      'Productos, registro 1: "categoriaId" apunta a un registro que no está en el backup.',
+    ]);
+    // Products without a category (saved before categories existed) are fine.
+    expect(errores(json((b) => delete b.datos.productos[0].categoriaId))).toEqual([]);
   });
 
   it('checks suppliers, their account entries and the entries that add to an account', () => {

@@ -4,7 +4,7 @@ import { porNombre } from '../lib/campos';
 import { idbRequest as req, newId, type DB } from '../lib/db';
 import { alertas, porFecha, stockPorProducto, type Alerta } from './logic';
 import { asientos, asientosPorProveedor, avisosPago, type AvisoPago, type Asiento } from './proveedores';
-import type { Movimiento, OperacionProveedor, Producto, Promo, PromoVendida, Proveedor, Venta } from './types';
+import type { Categoria, Movimiento, OperacionProveedor, Producto, Promo, PromoVendida, Proveedor, Venta } from './types';
 import type { DatosMovimiento, DatosOperacion, DatosVenta } from './validar';
 import { agruparVentas, SIN_PRECIO, type VentaConLineas } from './ventas';
 
@@ -269,6 +269,39 @@ export async function borrarVenta(db: DB, id: string): Promise<void> {
     await req(ventas.delete(id));
   });
   avisar();
+}
+
+// --- Categories ---
+
+export async function listarCategorias(db: DB): Promise<Categoria[]> {
+  return (await db.list<Categoria>('categorias')).sort(porNombre);
+}
+
+export function guardarCategoria(db: DB, c: Categoria): Promise<Categoria> {
+  return db.put('categorias', c);
+}
+
+export class CategoriaEnUso extends Error {
+  constructor(readonly productos: number) {
+    super(
+      `No se puede borrar: tiene ${productos === 1 ? 'un producto' : `${productos} productos`}. ` +
+        'Pasalos a otra categoría antes de borrarla.',
+    );
+  }
+}
+
+/** How many products (active or not) are in this category. */
+export function productosEnCategoria(db: DB, categoriaId: string): Promise<number> {
+  return db.tx('productos', 'readonly', (tx) => req(tx.objectStore('productos').index('categoriaId').count(categoriaId)));
+}
+
+/** Deletes a category; throws CategoriaEnUso (and deletes nothing) if some product is in it. */
+export async function borrarCategoria(db: DB, id: string): Promise<void> {
+  await db.tx(['productos', 'categorias'], 'readwrite', async (tx) => {
+    const n = await req(tx.objectStore('productos').index('categoriaId').count(id));
+    if (n) throw new CategoriaEnUso(n);
+    await req(tx.objectStore('categorias').delete(id));
+  });
 }
 
 // --- Promos ---

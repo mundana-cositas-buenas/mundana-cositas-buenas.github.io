@@ -39,7 +39,8 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **historialPrecios** (price history): `insumoId`, `fecha`, `unidadBase`, `costoPorUnidadBase` (fractional cents). A new entry is added, in the same transaction as the ingredient, only when its cost per base unit changes.
 
 ### Stock
-- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta` (required on every save, zero allowed; products saved before it became required may lack it, the list and product page show them as "Sin precio" until edited, and backups without it still import), `activo`, `proveedorId` (one fixed supplier per product, required on every save the same way: older products show as "Sin proveedor" until edited).
+- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta` (required on every save, zero allowed; products saved before it became required may lack it, the list and product page show them as "Sin precio" until edited, and backups without it still import), `activo`, `proveedorId` (one fixed supplier per product, required on every save the same way: older products show as "Sin proveedor" until edited), `categoriaId` (one category per product, required on every save the same way: older products show as "Sin categoría" until edited).
+- **categorias** (product categories): `nombre` (unique among categories). Only products have one; promos don't.
 - **promos**: `nombre` (unique among promos), `precio` (cents, zero allowed), `activo`, `componentes` (`[{ productoId, cantidad }]`, at least one, one entry per product, quantities > 0 and decimals allowed). A promo sells several products together at its own price; it has no stock of its own, unit or minimum.
 - **ventas** (sales): `fecha`, `descuentoPct` (0 to 100, decimals allowed, over the products sold on their own: not the promos), `nota?`, `anuladoEn?`, `promos?` (`[{ promoId, nombre, precio, cantidad }]`: the promos sold, one entry per promo, with name and price copied when sold). A sale has no product lines of its own: they are its movements.
 - **movimientos** (stock movements): `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad`, `fecha`, `nota?`, `anuladoEn?`, and on sale lines `ventaId` + `precioUnitario` (+ `promoId` on promo components).
@@ -71,6 +72,7 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **A supplier's balance is never stored**: it is the sum of its account (manual entries plus the entries that added to it). Voiding a stock entry that added to an account takes it out of both the stock and the account (it is one record).
 - **A supplier can't be deleted** while a product or an account line (even a voided one) refers to it; it can be deactivated. An inactive supplier isn't offered for products, but its account and payment warnings remain.
 - **An entry adds to the account only for a product with a supplier**, and only when the user leaves "Suma a la cuenta" checked (returns, gifts and purchases already entered by hand are unchecked).
+- **A category can't be deleted while it has products** (active or not): move them to another category first. Categories have no active flag. Grouping by category always uses each product's current category, past sales included (sales keep no category).
 - **Stock alert**: an active product with stock ≤ its minimum is "low" (bajo); with stock ≤ 0 it is "out of stock" (sin stock).
 
 ## Formulas (costing)
@@ -95,6 +97,8 @@ valor total   = sum(valorStock) over every product, active or not
 ```
 
 Products with stock but no cost are left out of the total and counted, so the UI can say so.
+
+Sales by category (per day, over the sales that count): each product line goes to its product's current category (deleted products and products without one go to "Sin categoría"), and each sale's discount is split among its categories in proportion to their amounts, rounding down and giving the cents left to the largest remainders, so the parts add up exactly to the discount. Promos are their own row ("Promos") at their price. The rows add up to the day's total.
 
 ## Formulas (suppliers)
 
@@ -136,7 +140,8 @@ ahorro       = por separado - precio            (negative = the promo costs more
 - Recipe list with cost per unit and suggested price, printable as a price list (with or without costs).
 
 ### Stock
-- Products table with current stock, highlighting low and out-of-stock ones, and the total stock value above it (shown once some product has a cost).
+- Products table with current stock, highlighting low and out-of-stock ones, and the total stock value above it (shown once some product has a cost). The table is grouped by category (by name, then "Sin categoría"), each group with a header showing its number of products and the stock value of all its products; search and "show inactive" apply inside the groups and empty groups are hidden. A category selector sits under the product name when adding or editing; a notice shows when there are no categories yet, or products without one.
+- Categories (`#/stock/categorias`): list with name and number of products, a row to add one, renaming in place (Editar or double click, Enter saves, Escape cancels) and Borrar (blocked, with a message, while it has products). The product page shows the product's category.
 - Required sale price per product (see the data model for older products without one). Optional cost per product. Editing a product warns, without blocking the save, when the cost is over the sale price. The product page shows cost, profit and margin (in red when it's a loss) and the stock value.
 - Keyboard-first movement entry for entries and adjustments: product (type to pick), quantity, Enter. Warns before stock would go negative. Sales are not entered here.
 - Product deletion is blocked, with a message, when the product is in a sale or a promo.
@@ -146,7 +151,7 @@ ahorro       = por separado - precio            (negative = the promo costs more
 - A top-level section, first in the navigation and the page for an empty or unknown hash; the "Ona" name in the header links to it.
 - The sale being entered: product or promo (type to pick; promos are listed as "Promo: <name>") + quantity (empty = 1) + Enter adds a line; adding a product or promo already in the sale adds to its quantity; ✕ removes a line. It shows each line's price and amount (a promo line also lists its components), subtotal, discount (noting it doesn't apply to promos), promos and total. A promo with an inactive component can't be added. Discount % and an optional note, then "Registrar venta" (Enter in the discount or note also registers). One warning lists every product whose stock would go negative, counting promo components.
 - The draft survives going to other pages (not a reload), and counts as unsaved input for the update notice.
-- Sales by day: one row per day with sales, newest first, with the number of sales and the total; each day expands to its sales (time, products and promos, discount, total, note, "Anular"). Today starts expanded. Voided sales show struck through, with "Borrar" (asks first).
+- Sales by day: one row per day with sales, newest first, with the number of sales and the total; each day expands to its sales (time, products and promos, discount, total, note, "Anular"). Today starts expanded, and an expanded day first shows its sales by category (see the formulas). Voided sales show struck through, with "Borrar" (asks first).
 - In the movement history, a sale's lines link to Ventas instead of offering "Anular" ("en promo" for promo components). Other voided movements offer "Borrar" (asks first).
 - Alerts panel and a low-stock counter badge in the navigation.
 
@@ -161,8 +166,8 @@ ahorro       = por separado - precio            (negative = the promo costs more
 ### Backup
 - **Export** everything to one JSON file, `ona-YYYY-MM-DD.json`:
   `{ formato: 'mundana-backup', version, exportadoEn, datos: { <every data store> } }`.
-  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos. Version 5 added `proveedores` and `operacionesProveedor` (and `proveedorId` on products, `proveedorId` + `importe` on entries); older files import with no suppliers.
-- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale, promo components → product, a sale's promos → promo, products / entries / account entries → supplier); a movement with a `ventaId` must be a `venta` with a `precioUnitario`, and one with a `promoId` must also have price 0 and belong to a sale that includes that promo. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
+  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos. Version 5 added `proveedores` and `operacionesProveedor` (and `proveedorId` on products, `proveedorId` + `importe` on entries); older files import with no suppliers. Version 6 added `categorias` (and `categoriaId` on products); older files import with no categories.
+- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale, promo components → product, a sale's promos → promo, products / entries / account entries → supplier, products → category); a movement with a `ventaId` must be a `venta` with a `precioUnitario`, and one with a `promoId` must also have price 0 and belong to a sale that includes that promo. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
 - The backup page ends with the running release (`package.json` `version`, set by `release.py`), to tell which version is deployed.
 - The date of the last backup is kept, and the app warns when there is data and no backup in more than **7 days**.
 - **CSV** exports of products (with supplier, cost, profit, margin and stock value), suppliers (with balance, overdue and due soon), every supplier's account (with running balance), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.

@@ -6,6 +6,11 @@ import {
   anularOperacion,
   anularVenta,
   borrarOperacion,
+  borrarCategoria,
+  CategoriaEnUso,
+  guardarCategoria,
+  listarCategorias,
+  productosEnCategoria,
   borrarProveedor,
   cargarAvisosPago,
   cuentaDe,
@@ -63,6 +68,35 @@ const producto = (nombre: string, stockMinimo = 0): Producto => ({
 });
 
 const t = (s: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, s));
+
+describe('categorias', () => {
+  const categoria = (nombre: string) => ({ id: newId(), actualizadoEn: '', nombre });
+
+  it('lists sorted by name and renames in place', async () => {
+    const db = await fresh();
+    const bebidas = await guardarCategoria(db, categoria('bebidas'));
+    await guardarCategoria(db, categoria('Almacén'));
+    expect((await listarCategorias(db)).map((c) => c.nombre)).toEqual(['Almacén', 'bebidas']);
+    await guardarCategoria(db, { ...bebidas, nombre: 'Bebidas frías' });
+    expect((await listarCategorias(db)).map((c) => c.nombre)).toEqual(['Almacén', 'Bebidas frías']);
+  });
+
+  it('deletes only a category without products', async () => {
+    const db = await fresh();
+    const bebidas = await guardarCategoria(db, categoria('Bebidas'));
+    const vacia = await guardarCategoria(db, categoria('Vacía'));
+    const jugo = await guardarProducto(db, { ...producto('jugo'), categoriaId: bebidas.id });
+    await guardarProducto(db, { ...producto('agua', 0), activo: false, categoriaId: bebidas.id });
+    expect(await productosEnCategoria(db, bebidas.id)).toBe(2);
+    await expect(borrarCategoria(db, bebidas.id)).rejects.toBeInstanceOf(CategoriaEnUso);
+    await expect(borrarCategoria(db, bebidas.id)).rejects.toThrow('tiene 2 productos');
+    await borrarCategoria(db, vacia.id);
+    expect((await listarCategorias(db)).map((c) => c.nombre)).toEqual(['Bebidas']);
+    // Once its products move elsewhere, it can go.
+    await guardarProducto(db, { ...jugo, categoriaId: vacia.id });
+    await expect(borrarCategoria(db, bebidas.id)).rejects.toThrow('tiene un producto');
+  });
+});
 
 describe('productos', () => {
   it('lists sorted by name', async () => {

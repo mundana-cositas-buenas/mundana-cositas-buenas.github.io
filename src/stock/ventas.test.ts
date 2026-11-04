@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Movimiento, Producto, Promo, Venta } from './types';
+import type { Categoria, Movimiento, Producto, Promo, Venta } from './types';
 import {
   agregarLinea,
   agregarPromo,
@@ -16,6 +16,8 @@ import {
   totales,
   totalesDe,
   totalesEnCurso,
+  repartir,
+  ventasPorCategoria,
   ventasPorDia,
   type VentaConLineas,
 } from './ventas';
@@ -221,5 +223,57 @@ describe('promos in a sale', () => {
     expect(quedanNegativos([{ producto: jugo, cantidad: 1 }], stock, [{ promo, cantidad: 2 }], productos)).toEqual([
       { producto: jugo, despues: -1 },
     ]);
+  });
+});
+
+describe('repartir', () => {
+  it('splits in proportion, adding up exactly', () => {
+    expect(repartir(100, [1, 1, 1])).toEqual([34, 33, 33]);
+    expect(repartir(10, [300, 100])).toEqual([8, 2]);
+    expect(repartir(7, [0, 5])).toEqual([0, 7]);
+    expect(repartir(0, [3, 4])).toEqual([0, 0]);
+    expect(repartir(5, [0, 0])).toEqual([0, 0]);
+    expect(repartir(5, [])).toEqual([]);
+  });
+});
+
+describe('ventasPorCategoria', () => {
+  const cat = (id: string, nombre: string): Categoria => ({ id, actualizadoEn: '', nombre });
+  const categorias = [cat('b', 'Bebidas'), cat('a', 'Almacén')];
+  const agua = { ...producto('agua', 100000), categoriaId: 'b' };
+  const jugoB = { ...jugo, categoriaId: 'b' };
+  const arroz = { ...producto('arroz', 200000), categoriaId: 'a' };
+  const miel = producto('miel', 300000); // no category
+  const productos = [agua, jugoB, arroz, miel];
+  const d = new Date(Date.UTC(2026, 2, 5, 12));
+  const con = (v: Venta, lineas: Movimiento[]): VentaConLineas => ({ venta: v, lineas });
+
+  it('sums each category, then products without one, then promos, adding up to the total', () => {
+    const v1 = con(venta('v1', d, 10), [linea('v1', 'agua', 2, 100000), linea('v1', 'arroz', 1, 200000), linea('v1', 'miel', 1, 300000)]);
+    const v2 = con({ ...venta('v2', d), promos: [{ promoId: 'pr', nombre: 'Combo', precio: 50000, cantidad: 2 }] }, [
+      linea('v2', 'jugo', 1, 150000),
+      { ...linea('v2', 'arroz', 1, 0), id: 'v2-c', promoId: 'pr' },
+    ]);
+    const anulada = con(venta('v3', d, 0, d.toISOString()), [linea('v3', 'arroz', 5, 200000)]);
+    const filas = ventasPorCategoria([v1, v2, anulada], productos, categorias);
+    expect(filas).toEqual([
+      { tipo: 'categoria', categoria: categorias[1], total: 180000 }, // arroz 2000 - 10 %
+      { tipo: 'categoria', categoria: categorias[0], total: 180000 + 150000 }, // agua 2000 - 10 %, jugo
+      { tipo: 'sin', total: 270000 }, // miel 3000 - 10 %
+      { tipo: 'promos', total: 100000 },
+    ]);
+    const total = filas.reduce((s, f) => s + f.total, 0);
+    expect(total).toBe(totalesDe(v1).total + totalesDe(v2).total);
+  });
+
+  it('splits an odd discount without losing cents, and counts deleted products as without a category', () => {
+    const v = con(venta('v1', d, 50), [linea('v1', 'agua', 1, 1), linea('v1', 'arroz', 1, 1), linea('v1', 'borrado', 1, 1)]);
+    const filas = ventasPorCategoria([v], productos, categorias);
+    expect(filas.map((f) => f.tipo)).toEqual(['categoria', 'categoria', 'sin']);
+    expect(filas.reduce((s, f) => s + f.total, 0)).toBe(totalesDe(v).total);
+  });
+
+  it('is empty without sales that count', () => {
+    expect(ventasPorCategoria([con(venta('v', d, 0, d.toISOString()), [linea('v', 'agua', 1, 100)])], productos, categorias)).toEqual([]);
   });
 });

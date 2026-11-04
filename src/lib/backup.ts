@@ -3,7 +3,7 @@
 import type { Insumo, PrecioHistorico, Receta, RecetaLinea } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
 import { MEDIOS_PAGO } from '../stock/proveedores';
-import type { Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
+import type { Categoria, Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
 import { idbRequest as req, type DB, type Registro, type StoreName } from './db';
 import { esUnidad, esUnidadBase } from './units';
 
@@ -14,7 +14,8 @@ export const FORMATO = 'mundana-backup';
 // 4: adds promos, promos on sales and promoId on their movements (older files are read with no promos).
 // 5: adds proveedores and operacionesProveedor, proveedorId on products, and proveedorId/importe on
 //    entries (older files are read with no suppliers).
-export const VERSION = 5;
+// 6: adds categorias and categoriaId on products (older files are read with no categories).
+export const VERSION = 6;
 
 /** Data stores, in dependency order. `meta` (e.g. the last backup date) is not exported. */
 export const STORES = [
@@ -23,6 +24,7 @@ export const STORES = [
   'recetas',
   'recetaLineas',
   'proveedores',
+  'categorias',
   'productos',
   'promos',
   'ventas',
@@ -37,6 +39,7 @@ export const NOMBRES: Record<StoreDatos, string> = {
   recetas: 'Recetas',
   recetaLineas: 'Líneas de receta',
   proveedores: 'Proveedores',
+  categorias: 'Categorías',
   productos: 'Productos',
   promos: 'Promos',
   ventas: 'Ventas',
@@ -50,6 +53,7 @@ export interface Datos {
   recetas: Receta[];
   recetaLineas: RecetaLinea[];
   proveedores: Proveedor[];
+  categorias: Categoria[];
   productos: Producto[];
   promos: Promo[];
   ventas: Venta[];
@@ -231,7 +235,10 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
         precioVenta: opcional(centavos),
         activo: booleano,
         proveedorId: opcional(noVacio),
+        categoriaId: opcional(noVacio),
       };
+    case 'categorias':
+      return { ...REGISTRO, nombre: texto };
     case 'proveedores':
       return {
         ...REGISTRO,
@@ -323,6 +330,7 @@ export function leerBackup(contenido: string): Lectura {
   if ((v as number) < 4 && datos.promos === undefined) datos.promos = [];
   if ((v as number) < 5 && datos.proveedores === undefined) datos.proveedores = [];
   if ((v as number) < 5 && datos.operacionesProveedor === undefined) datos.operacionesProveedor = [];
+  if ((v as number) < 6 && datos.categorias === undefined) datos.categorias = [];
 
   const ids = {} as Record<StoreDatos, Set<string>>;
   for (const s of STORES) {
@@ -363,6 +371,7 @@ export function leerBackup(contenido: string): Lectura {
   ref('movimientos', 'productoId', 'productos');
   ref('movimientos', 'ventaId', 'ventas');
   ref('productos', 'proveedorId', 'proveedores');
+  ref('productos', 'categoriaId', 'categorias');
   ref('movimientos', 'proveedorId', 'proveedores');
   ref('operacionesProveedor', 'proveedorId', 'proveedores');
   // Inside lists: a promo's components → products; a sale's promos → promos.

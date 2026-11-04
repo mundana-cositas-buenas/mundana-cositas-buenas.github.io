@@ -4,12 +4,13 @@
   import { newId, type DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
   import { coincide } from '../lib/texto';
-  import { nivel, valorInventario } from './logic';
+  import { agruparPorCategoria, nivel, valorInventario } from './logic';
   import ProductoFila from './ProductoFila.svelte';
   import {
     borrarProducto,
     contarMovimientos,
     guardarProducto,
+    listarCategorias,
     listarProductos,
     listarProveedores,
     ProductoEnPromos,
@@ -18,7 +19,7 @@
     stockActualDe,
     ventasConProducto,
   } from './repo';
-  import type { Producto, Proveedor } from './types';
+  import type { Categoria, Producto, Proveedor } from './types';
   import type { DatosProducto } from './validar';
 
   let { db }: { db: DB } = $props();
@@ -26,6 +27,7 @@
   let productos = $state<Producto[]>([]);
   let stock = $state(new Map<string, number>());
   let proveedores = $state<Proveedor[]>([]);
+  let categorias = $state<Categoria[]>([]);
   let cargando = $state(true);
   let busqueda = $state('');
   let verInactivos = $state(false);
@@ -44,9 +46,18 @@
   // Over every product, not just the visible ones; hidden until some product has a cost.
   const conCosto = $derived(productos.some((p) => p.costo !== undefined));
   const inventario = $derived(valorInventario(productos, stock));
+  // Groups of the visible products; each group's stock value is over all its products, like the total.
+  const grupos = $derived(agruparPorCategoria(visibles, categorias));
+  const todosPorGrupo = $derived(new Map(agruparPorCategoria(productos, categorias).map((g) => [g.categoria?.id ?? '', g.productos])));
+  const valorDe = (categoriaId: string) => valorInventario(todosPorGrupo.get(categoriaId) ?? [], stock).total;
 
   async function cargar() {
-    [productos, stock, proveedores] = await Promise.all([listarProductos(db), stockActualDe(db), listarProveedores(db)]);
+    [productos, stock, proveedores, categorias] = await Promise.all([
+      listarProductos(db),
+      stockActualDe(db),
+      listarProveedores(db),
+      listarCategorias(db),
+    ]);
     cargando = false;
   }
   cargar();
@@ -55,6 +66,8 @@
   const stockDe = (p: Producto) => stock.get(p.id) ?? 0;
   const proveedorPorId = $derived(new Map(proveedores.map((p) => [p.id, p])));
   const sinProveedor = $derived(productos.filter((p) => !p.proveedorId).length);
+  const categoriaIds = $derived(new Set(categorias.map((c) => c.id)));
+  const sinCategoria = $derived(productos.filter((p) => !p.categoriaId || !categoriaIds.has(p.categoriaId)).length);
 
   async function agregar(datos: DatosProducto) {
     const p = await guardarProducto(db, { ...datos, id: newId(), actualizadoEn: '' });
@@ -122,6 +135,13 @@
     suman a ninguna cuenta.
   </p>
 {/if}
+{#if !cargando && !categorias.length}
+  <p class="aviso">Cada producto necesita una categoría: <a href="#/stock/categorias">cargá una categoría</a> antes de agregar productos.</p>
+{:else if sinCategoria}
+  <p class="aviso">
+    {sinCategoria === 1 ? 'Hay un producto' : `Hay ${sinCategoria} productos`} sin categoría: editalos para elegirla.
+  </p>
+{/if}
 
 <table class="tabla">
   <thead>
@@ -138,43 +158,57 @@
     </tr>
   </thead>
   <tbody>
-    <ProductoFila otrosNombres={nombresSalvo()} {proveedores} onguardar={agregar} />
+    <ProductoFila otrosNombres={nombresSalvo()} {proveedores} {categorias} onguardar={agregar} />
     {#if cargando}
       <tr><td colspan="9" class="muted">Cargando…</td></tr>
     {/if}
-    {#each visibles as p (p.id)}
-      {#if editando === p.id}
-        <ProductoFila
-          inicial={p}
-          stock={stockDe(p)}
-          enfocar
-          otrosNombres={nombresSalvo(p.id)}
-          {proveedores}
-          onguardar={(d) => actualizar(p, d)}
-          oncancelar={() => terminarEdicion(p.id)}
-        />
-      {:else}
-        {@const n = p.activo ? nivel(stockDe(p), p.stockMinimo) : 'ok'}
-        {@const prov = p.proveedorId ? proveedorPorId.get(p.proveedorId) : undefined}
-        <tr class={n} class:inactivo={!p.activo} ondblclick={() => (editando = p.id)}>
-          <td><a href="#/stock/producto/{p.id}">{p.nombre}</a></td>
-          <td>{#if prov}<a href="#/proveedores/{prov.id}">{prov.nombre}</a>{:else}<span class="aviso">Sin proveedor</span>{/if}</td>
-          <td>{p.unidad}</td>
-          <td class="num fuerte" title={n === 'agotado' ? 'Sin stock' : n === 'bajo' ? 'Bajo el mínimo' : undefined}>
-            {formatNumero(stockDe(p))}
-          </td>
-          <td class="num">{formatNumero(p.stockMinimo)}</td>
-          <td class="num">{p.costo === undefined ? '' : formatPesos(p.costo)}</td>
-          <td class="num">
-            {#if p.precioVenta === undefined}<span class="aviso">Sin precio</span>{:else}{formatPesos(p.precioVenta)}{/if}
-          </td>
-          <td>{p.activo ? 'sí' : 'no'}</td>
-          <td class="acciones">
-            <button type="button" class="secundario" data-editar={p.id} onclick={() => (editando = p.id)}>Editar</button>
-            <button type="button" class="secundario peligro" onclick={() => borrar(p)}>Borrar</button>
-          </td>
-        </tr>
-      {/if}
-    {/each}
   </tbody>
+  {#each grupos as g (g.categoria?.id ?? '')}
+    <tbody>
+      <tr class="grupo">
+        <th colspan="9">
+          {#if g.categoria}{g.categoria.nombre}{:else}<span class="aviso">Sin categoría</span>{/if}
+          <span class="muted">
+            {g.productos.length} {g.productos.length === 1 ? 'producto' : 'productos'}{#if conCosto}
+              · Valor del stock: {formatPesos(valorDe(g.categoria?.id ?? ''))}{/if}
+          </span>
+        </th>
+      </tr>
+      {#each g.productos as p (p.id)}
+        {#if editando === p.id}
+          <ProductoFila
+            inicial={p}
+            stock={stockDe(p)}
+            enfocar
+            otrosNombres={nombresSalvo(p.id)}
+            {proveedores}
+            {categorias}
+            onguardar={(d) => actualizar(p, d)}
+            oncancelar={() => terminarEdicion(p.id)}
+          />
+        {:else}
+          {@const n = p.activo ? nivel(stockDe(p), p.stockMinimo) : 'ok'}
+          {@const prov = p.proveedorId ? proveedorPorId.get(p.proveedorId) : undefined}
+          <tr class={n} class:inactivo={!p.activo} ondblclick={() => (editando = p.id)}>
+            <td><a href="#/stock/producto/{p.id}">{p.nombre}</a></td>
+            <td>{#if prov}<a href="#/proveedores/{prov.id}">{prov.nombre}</a>{:else}<span class="aviso">Sin proveedor</span>{/if}</td>
+            <td>{p.unidad}</td>
+            <td class="num fuerte" title={n === 'agotado' ? 'Sin stock' : n === 'bajo' ? 'Bajo el mínimo' : undefined}>
+              {formatNumero(stockDe(p))}
+            </td>
+            <td class="num">{formatNumero(p.stockMinimo)}</td>
+            <td class="num">{p.costo === undefined ? '' : formatPesos(p.costo)}</td>
+            <td class="num">
+              {#if p.precioVenta === undefined}<span class="aviso">Sin precio</span>{:else}{formatPesos(p.precioVenta)}{/if}
+            </td>
+            <td>{p.activo ? 'sí' : 'no'}</td>
+            <td class="acciones">
+              <button type="button" class="secundario" data-editar={p.id} onclick={() => (editando = p.id)}>Editar</button>
+              <button type="button" class="secundario peligro" onclick={() => borrar(p)}>Borrar</button>
+            </td>
+          </tr>
+        {/if}
+      {/each}
+    </tbody>
+  {/each}
 </table>

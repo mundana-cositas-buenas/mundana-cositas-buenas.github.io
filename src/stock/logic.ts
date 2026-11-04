@@ -1,7 +1,7 @@
 // Stock math: pure functions. Current stock is never stored, it is the sum of the movements.
 
 import type { Centavos } from '../lib/money';
-import type { Movimiento, Producto } from './types';
+import type { Categoria, Movimiento, Producto } from './types';
 
 // Quantities can be decimal (kg); round sums so 0.1 + 0.2 shows as 0.3.
 const redondear = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -100,4 +100,24 @@ export function valorInventario(productos: readonly Producto[], stock: ReadonlyM
     else if (s > 0) sinCosto++;
   }
   return { total, sinCosto };
+}
+
+/** Products of one category; `categoria` is undefined for the products without one (or with a deleted one). */
+export interface GrupoCategoria<P extends Producto = Producto> {
+  categoria?: Categoria;
+  productos: P[];
+}
+
+/**
+ * Groups products by category, keeping their order inside each group: categories by name,
+ * then the products without a category. Categories with no products are left out.
+ */
+export function agruparPorCategoria<P extends Producto>(productos: readonly P[], categorias: readonly Categoria[]): GrupoCategoria<P>[] {
+  const grupos = new Map<string, GrupoCategoria<P>>(categorias.map((c) => [c.id, { categoria: c, productos: [] }]));
+  const sin: GrupoCategoria<P> = { productos: [] };
+  for (const p of productos) (grupos.get(p.categoriaId ?? '') ?? sin).productos.push(p);
+  const res = [...grupos.values()]
+    .filter((g) => g.productos.length)
+    .sort((a, b) => a.categoria!.nombre.localeCompare(b.categoria!.nombre, 'es', { sensitivity: 'base' }));
+  return sin.productos.length ? [...res, sin] : res;
 }

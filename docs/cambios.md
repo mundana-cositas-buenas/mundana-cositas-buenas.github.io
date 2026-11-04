@@ -1,5 +1,3 @@
-* poder crear grupos/categorias de productos para tener una mejor visibilidad de la información
-
 * podemos hacer el stock de un producto editable desde la vista de productos en el stock?
   * que siga siendo un movimiento de caja como es ahora, pero que al editar el stock en la otra página/tab se cree el movimiento
 

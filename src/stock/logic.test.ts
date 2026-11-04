@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { alertas, efecto, historial, nivel, rentabilidad, stockActual, stockPorProducto, valorInventario, valorStock } from './logic';
-import type { Movimiento, Producto, TipoMovimiento } from './types';
+import { agruparPorCategoria, alertas, efecto, historial, nivel, rentabilidad, stockActual, stockPorProducto, valorInventario, valorStock } from './logic';
+import type { Categoria, Movimiento, Producto, TipoMovimiento } from './types';
 
 let n = 0;
 const mov = (tipo: TipoMovimiento, cantidad: number, extra: Partial<Movimiento> = {}): Movimiento => ({
@@ -131,5 +131,26 @@ describe('valorInventario', () => {
     ]);
     expect(valorInventario(ps, stock)).toEqual({ total: 4000, sinCosto: 1 });
     expect(valorInventario([], stock)).toEqual({ total: 0, sinCosto: 0 });
+  });
+});
+
+describe('agruparPorCategoria', () => {
+  const cat = (id: string, nombre: string): Categoria => ({ id, actualizadoEn: '', nombre });
+  const en = (nombre: string, categoriaId?: string): Producto => ({ ...producto(nombre, 0), ...(categoriaId ? { categoriaId } : {}) });
+
+  it('groups by category name, keeps the product order, and puts products without one last', () => {
+    const categorias = [cat('b', 'bebidas'), cat('a', 'Almacén'), cat('v', 'Vacía')];
+    const productos = [en('agua', 'b'), en('arroz', 'a'), en('miel'), en('jugo', 'b'), en('raro', 'borrada')];
+    const g = agruparPorCategoria(productos, categorias);
+    expect(g.map((x) => [x.categoria?.nombre, x.productos.map((p) => p.nombre)])).toEqual([
+      ['Almacén', ['arroz']],
+      ['bebidas', ['agua', 'jugo']],
+      [undefined, ['miel', 'raro']],
+    ]);
+  });
+
+  it('has no "without a category" group when every product has one', () => {
+    expect(agruparPorCategoria([en('agua', 'b')], [cat('b', 'Bebidas')]).map((x) => x.categoria?.id)).toEqual(['b']);
+    expect(agruparPorCategoria([], [cat('b', 'Bebidas')])).toEqual([]);
   });
 });
