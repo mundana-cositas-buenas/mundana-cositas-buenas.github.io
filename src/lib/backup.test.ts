@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Insumo, LineaCostoFijo, LineaInsumo, PrecioHistorico, Receta } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
-import type { Movimiento, Producto, Promo, Venta } from '../stock/types';
+import type { Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
 import {
   backupVencido,
   cambiosBackup,
@@ -61,13 +61,20 @@ const lineaInsumo: LineaInsumo = {
   mermaPct: 0,
 };
 const lineaFija: LineaCostoFijo = { id: 'l2', actualizadoEn: T, recetaId: 'r1', orden: 1, tipo: 'costoFijo', descripcion: 'Gas', monto: 5000 };
-const producto: Producto = { id: 'p1', actualizadoEn: T, nombre: 'Miel', unidad: 'frasco', stockMinimo: 2, costo: 120000, activo: true };
+const producto: Producto = { id: 'p1', actualizadoEn: T, nombre: 'Miel', unidad: 'frasco', stockMinimo: 2, costo: 120000, activo: true, proveedorId: 'pv1' };
+const proveedor: Proveedor = { id: 'pv1', actualizadoEn: T, nombre: 'Apícola Sur', plazoDias: 15, activo: true, telefono: '099 123 456', rut: '21', cuenta: '001-2' };
+const operaciones: OperacionProveedor[] = [
+  { id: 'o1', actualizadoEn: T, proveedorId: 'pv1', tipo: 'compra', importe: 500000, fecha: T, nota: 'factura 12' },
+  { id: 'o2', actualizadoEn: T, proveedorId: 'pv1', tipo: 'pago', importe: 200000, fecha: T, medioPago: 'transferencia' },
+  { id: 'o3', actualizadoEn: T, proveedorId: 'pv1', tipo: 'ajuste', importe: -1000, fecha: T, anuladoEn: T },
+];
 const movs: Movimiento[] = [
   { id: 'm1', actualizadoEn: T, productoId: 'p1', tipo: 'entrada', cantidad: 10, fecha: T },
   { id: 'm2', actualizadoEn: T, productoId: 'p1', tipo: 'venta', cantidad: 3, fecha: T, nota: 'feria', anuladoEn: T },
   { id: 'm3', actualizadoEn: T, productoId: 'p1', tipo: 'ajuste', cantidad: -1.5, fecha: T },
   { id: 'm4', actualizadoEn: T, productoId: 'p1', tipo: 'venta', cantidad: 2, fecha: T, ventaId: 'v1', precioUnitario: 150000 },
   { id: 'm5', actualizadoEn: T, productoId: 'p1', tipo: 'venta', cantidad: 2, fecha: T, ventaId: 'v1', precioUnitario: 0, promoId: 'pr1' },
+  { id: 'm6', actualizadoEn: T, productoId: 'p1', tipo: 'entrada', cantidad: 5, fecha: T, proveedorId: 'pv1', importe: 600000 },
 ];
 const promo: Promo = { id: 'pr1', actualizadoEn: T, nombre: 'Miel x2', precio: 200000, activo: true, componentes: [{ productoId: 'p1', cantidad: 2 }] };
 const venta: Venta = {
@@ -92,6 +99,8 @@ const backup = (): Backup => ({
     promos: [structuredClone(promo)],
     ventas: [structuredClone(venta)],
     movimientos: structuredClone(movs),
+    proveedores: [structuredClone(proveedor)],
+    operacionesProveedor: structuredClone(operaciones),
   },
 });
 
@@ -118,7 +127,7 @@ describe('exportar / importar', () => {
     const antes = await exportar(db, new Date(T));
 
     const texto = serializar(antes);
-    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], promos: [], ventas: [], movimientos: [] } });
+    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], promos: [], ventas: [], movimientos: [], proveedores: [], operacionesProveedor: [] } });
     expect(Object.values(await contar(db)).every((c) => c === 0)).toBe(true);
 
     const r = leerBackup(texto);
@@ -138,7 +147,18 @@ describe('exportar / importar', () => {
     expect(b.version).toBe(VERSION);
     expect(b.exportadoEn).toBe(T);
     expect(Object.keys(b.datos).sort()).toEqual([...STORES].sort());
-    expect(contarBackup(b)).toEqual({ insumos: 1, historialPrecios: 1, recetas: 1, recetaLineas: 2, productos: 1, promos: 1, ventas: 1, movimientos: 5 });
+    expect(contarBackup(b)).toEqual({
+      insumos: 1,
+      historialPrecios: 1,
+      recetas: 1,
+      recetaLineas: 2,
+      proveedores: 1,
+      productos: 1,
+      promos: 1,
+      ventas: 1,
+      movimientos: 6,
+      operacionesProveedor: 3,
+    });
     expect(await contar(db)).toEqual(contarBackup(b));
   });
 
@@ -246,13 +266,20 @@ describe('leerBackup', () => {
 
   it('rejects repeated ids and dangling references', () => {
     expect(errores(json((b) => b.datos.movimientos.push(b.datos.movimientos[0])))).toEqual([
-      'Movimientos de stock, registro 6: id repetido (m1).',
+      'Movimientos de stock, registro 7: id repetido (m1).',
     ]);
     expect(errores(json((b) => (b.datos.recetaLineas[0].insumoId = 'nada')))).toEqual([
       'Líneas de receta, registro 1: "insumoId" apunta a un registro que no está en el backup.',
     ]);
-    // 5 movements and the promo's component.
-    expect(errores(json((b) => (b.datos.productos = [])))).toHaveLength(6);
+    // 6 movements and the promo's component.
+    expect(errores(json((b) => (b.datos.productos = [])))).toHaveLength(7);
+    expect(errores(json((b) => (b.datos.proveedores = [])))).toEqual([
+      'Productos, registro 1: "proveedorId" apunta a un registro que no está en el backup.',
+      'Movimientos de stock, registro 6: "proveedorId" apunta a un registro que no está en el backup.',
+      'Operaciones con proveedores, registro 1: "proveedorId" apunta a un registro que no está en el backup.',
+      'Operaciones con proveedores, registro 2: "proveedorId" apunta a un registro que no está en el backup.',
+      'Operaciones con proveedores, registro 3: "proveedorId" apunta a un registro que no está en el backup.',
+    ]);
     expect(errores(json((b) => (b.datos.ventas = [])))).toEqual([
       'Movimientos de stock, registro 4: "ventaId" apunta a un registro que no está en el backup.',
       'Movimientos de stock, registro 5: "ventaId" apunta a un registro que no está en el backup.',
@@ -307,6 +334,45 @@ describe('leerBackup', () => {
     expect(r.ok && r.backup.datos.promos).toEqual([]);
     // From version 4 on the list is required.
     expect(errores(json((b) => delete b.datos.promos))).toContain('Promos: falta la lista.');
+  });
+
+  it('upgrades version 4 files, which had no suppliers', () => {
+    const r = leerBackup(
+      json((b) => {
+        b.version = 4;
+        delete b.datos.proveedores;
+        delete b.datos.operacionesProveedor;
+        delete b.datos.productos[0].proveedorId;
+        b.datos.movimientos = b.datos.movimientos.filter((m: Movimiento) => !m.proveedorId);
+      }),
+    );
+    expect(r.ok && r.backup.version).toBe(VERSION);
+    expect(r.ok && r.backup.datos.proveedores).toEqual([]);
+    expect(r.ok && r.backup.datos.operacionesProveedor).toEqual([]);
+    // From version 5 on the lists are required.
+    expect(errores(json((b) => delete b.datos.proveedores))).toContain('Proveedores: falta la lista.');
+    expect(errores(json((b) => delete b.datos.operacionesProveedor))).toContain('Operaciones con proveedores: falta la lista.');
+  });
+
+  it('checks suppliers, their account entries and the entries that add to an account', () => {
+    const campo = (store: string, i: number, k: string) => `${store}, registro ${i}: "${k}" falta o es inválido.`;
+    expect(errores(json((b) => (b.datos.proveedores[0].plazoDias = 1.5)))).toEqual([campo('Proveedores', 1, 'plazoDias')]);
+    expect(errores(json((b) => (b.datos.proveedores[0].rut = 21)))).toEqual([campo('Proveedores', 1, 'rut')]);
+    const ops = 'Operaciones con proveedores';
+    expect(errores(json((b) => (b.datos.operacionesProveedor[0].importe = 0)))).toEqual([campo(ops, 1, 'importe')]);
+    expect(errores(json((b) => (b.datos.operacionesProveedor[0].importe = 10.5)))).toEqual([campo(ops, 1, 'importe')]);
+    expect(errores(json((b) => (b.datos.operacionesProveedor[1].importe = -5)))).toEqual([campo(ops, 2, 'importe')]);
+    expect(errores(json((b) => (b.datos.operacionesProveedor[2].importe = 0)))).toEqual([campo(ops, 3, 'importe')]);
+    expect(errores(json((b) => (b.datos.operacionesProveedor[0].tipo = 'regalo')))).toEqual([campo(ops, 1, 'tipo')]);
+    // A payment has a known method; nothing else has one.
+    expect(errores(json((b) => delete b.datos.operacionesProveedor[1].medioPago))).toEqual([campo(ops, 2, 'medioPago')]);
+    expect(errores(json((b) => (b.datos.operacionesProveedor[1].medioPago = 'bitcoin')))).toEqual([campo(ops, 2, 'medioPago')]);
+    expect(errores(json((b) => (b.datos.operacionesProveedor[0].medioPago = 'efectivo')))).toEqual([campo(ops, 1, 'medioPago')]);
+    // proveedorId and importe go together, and only on an entrada.
+    const movs = 'Movimientos de stock';
+    expect(errores(json((b) => delete b.datos.movimientos[5].importe))).toEqual([campo(movs, 6, 'importe')]);
+    expect(errores(json((b) => delete b.datos.movimientos[5].proveedorId))).toEqual([campo(movs, 6, 'proveedorId')]);
+    expect(errores(json((b) => (b.datos.movimientos[2].importe = 100)))).toEqual([campo(movs, 3, 'importe')]);
   });
 
   it('checks promos, the promos of a sale and their components', () => {

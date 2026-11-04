@@ -21,8 +21,8 @@
   import type { DB } from '../lib/db';
   import { descargar } from '../lib/descarga';
   import { formatFechaHora } from '../lib/texto';
-  import { csvProductos } from '../stock/csv';
-  import { listarProductos, stockActualDe } from '../stock/repo';
+  import { csvCuentasProveedores, csvProductos, csvProveedores } from '../stock/csv';
+  import { cuentas, listarProductos, listarProveedores, stockActualDe } from '../stock/repo';
 
   let { db }: { db: DB } = $props();
 
@@ -110,7 +110,15 @@
   const exportarCsv = (sufijo: string, generar: () => Promise<string>) =>
     hacer(async () => descargar(nombreArchivo(new Date(), sufijo, 'csv'), await generar(), 'text/csv;charset=utf-8'));
 
-  const csvDeProductos = async () => csvProductos(await listarProductos(db), await stockActualDe(db));
+  const csvDeProductos = async () => {
+    const [productos, stock, proveedores] = await Promise.all([listarProductos(db), stockActualDe(db), listarProveedores(db)]);
+    return csvProductos(productos, stock, proveedores);
+  };
+  const csvDeProveedores = async () => csvProveedores(await listarProveedores(db), await cuentas(db));
+  const csvDeCuentas = async () => {
+    const [proveedores, porProveedor, productos] = await Promise.all([listarProveedores(db), cuentas(db), listarProductos(db)]);
+    return csvCuentasProveedores(proveedores, porProveedor, productos);
+  };
   const csvDeInsumos = async () => csvInsumos(await listarInsumos(db));
   const csvDeRecetas = async () => {
     const [recetas, lineas, insumos] = await Promise.all([listarRecetas(db), lineasPorReceta(db), listarInsumos(db)]);
@@ -200,6 +208,10 @@
 <p class="muted">Para abrir en Excel u otra planilla. No sirve para restaurar: para eso está el backup JSON.</p>
 <div class="barra">
   <button type="button" class="secundario" onclick={() => exportarCsv('productos', csvDeProductos)} disabled={ocupado}>Productos</button>
+  <button type="button" class="secundario" onclick={() => exportarCsv('proveedores', csvDeProveedores)} disabled={ocupado}>Proveedores</button>
+  <button type="button" class="secundario" onclick={() => exportarCsv('cuentas-proveedores', csvDeCuentas)} disabled={ocupado}>
+    Cuentas de proveedores
+  </button>
   <button type="button" class="secundario" onclick={() => exportarCsv('insumos', csvDeInsumos)} disabled={ocupado}>Insumos</button>
   <button type="button" class="secundario" onclick={() => exportarCsv('recetas', csvDeRecetas)} disabled={ocupado}>Recetas</button>
 </div>

@@ -8,7 +8,8 @@
   import { requestPersistence, type PersistState } from './lib/storage';
   import type { Ediciones } from './pwa/ediciones';
   import { aplicarVersion, aviso, avisosVersion, type AvisoVersion } from './pwa/registro';
-  import { cambiosStock, cargarAlertas } from './stock/repo';
+  import ProveedoresSeccion from './stock/ProveedoresSeccion.svelte';
+  import { cambiosStock, cargarAlertas, cargarAvisosPago } from './stock/repo';
   import StockView from './stock/StockView.svelte';
   import VentasView from './stock/VentasView.svelte';
 
@@ -72,10 +73,16 @@
   const seccion = $derived(seccionDesdeHash(hash));
   const ruta = $derived(subruta(hash));
 
-  // Low-stock count for the nav badge, refreshed after every stock write.
+  // Nav badges, refreshed after every stock or supplier write: low-stock products, and suppliers with
+  // payments overdue or due soon. Due dates move with the calendar, so pagos also refreshes on navigation.
   let alertas = $state(0);
+  let pagos = $state(0);
   $effect(() => {
-    const actualizar = async () => (alertas = (await cargarAlertas(await db)).length);
+    void hash;
+    const actualizar = async () => {
+      const d = await db;
+      [alertas, pagos] = await Promise.all([cargarAlertas(d).then((a) => a.length), cargarAvisosPago(d).then((a) => a.length)]);
+    };
     actualizar().catch(() => {});
     cambiosStock.addEventListener('cambio', actualizar);
     return () => cambiosStock.removeEventListener('cambio', actualizar);
@@ -109,7 +116,7 @@
   <nav>
     {#each SECCIONES as s (s.id)}
       <a href="#/{s.id}" aria-current={seccion === s.id ? 'page' : undefined}>
-        {s.titulo}{#if s.id === 'stock' && alertas}&nbsp;<span class="badge" title="Productos con stock bajo">{alertas}</span>{/if}
+        {s.titulo}{#if s.id === 'stock' && alertas}&nbsp;<span class="badge" title="Productos con stock bajo">{alertas}</span>{/if}{#if s.id === 'proveedores' && pagos}&nbsp;<span class="badge" title="Proveedores con pagos vencidos o por vencer">{pagos}</span>{/if}
       </a>
     {/each}
   </nav>
@@ -139,6 +146,8 @@
       <CostosView {db} {ruta} />
     {:else if seccion === 'stock'}
       <StockView {db} {ruta} {alertas} {ediciones} />
+    {:else if seccion === 'proveedores'}
+      <ProveedoresSeccion {db} {ruta} />
     {:else}
       <BackupView {db} />
     {/if}

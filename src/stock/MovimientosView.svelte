@@ -4,14 +4,15 @@
   import { efecto } from './logic';
   import MovimientoRapido from './MovimientoRapido.svelte';
   import MovimientosTabla from './MovimientosTabla.svelte';
-  import { listarMovimientos, listarProductos, stockActualDe } from './repo';
-  import type { Movimiento, Producto } from './types';
+  import { listarMovimientos, listarProductos, listarProveedores, stockActualDe } from './repo';
+  import type { Movimiento, Producto, Proveedor } from './types';
 
   let { db }: { db: DB } = $props();
 
   const MAX = 200;
 
   let productos = $state<Producto[]>([]);
+  let proveedores = $state<Proveedor[]>([]);
   let movimientos = $state<Movimiento[]>([]); // newest first
   let stock = $state(new Map<string, number>());
   let cargando = $state(true);
@@ -24,7 +25,12 @@
   const filas = $derived(filtrados.slice(0, MAX).map((mov) => ({ mov, producto: porId.get(mov.productoId) })));
 
   async function cargar() {
-    [productos, movimientos, stock] = await Promise.all([listarProductos(db), listarMovimientos(db), stockActualDe(db)]);
+    [productos, movimientos, stock, proveedores] = await Promise.all([
+      listarProductos(db),
+      listarMovimientos(db),
+      stockActualDe(db),
+      listarProveedores(db),
+    ]);
     cargando = false;
   }
   cargar();
@@ -55,7 +61,7 @@
 {:else if !productos.some((p) => p.activo)}
   <p class="muted">Todavía no hay productos activos. <a href="#/stock">Cargá los productos</a> para registrar movimientos.</p>
 {:else}
-  <MovimientoRapido {db} {productos} {stock} onregistrado={registrado} />
+  <MovimientoRapido {db} {productos} {proveedores} {stock} onregistrado={registrado} />
   <p class="muted">Las ventas se registran en <a href="#/ventas">Ventas</a>.</p>
 {/if}
 

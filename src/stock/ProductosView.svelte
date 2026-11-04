@@ -11,19 +11,21 @@
     contarMovimientos,
     guardarProducto,
     listarProductos,
+    listarProveedores,
     ProductoEnPromos,
     ProductoEnVentas,
     promosConProducto,
     stockActualDe,
     ventasConProducto,
   } from './repo';
-  import type { Producto } from './types';
+  import type { Producto, Proveedor } from './types';
   import type { DatosProducto } from './validar';
 
   let { db }: { db: DB } = $props();
 
   let productos = $state<Producto[]>([]);
   let stock = $state(new Map<string, number>());
+  let proveedores = $state<Proveedor[]>([]);
   let cargando = $state(true);
   let busqueda = $state('');
   let verInactivos = $state(false);
@@ -44,13 +46,15 @@
   const inventario = $derived(valorInventario(productos, stock));
 
   async function cargar() {
-    [productos, stock] = await Promise.all([listarProductos(db), stockActualDe(db)]);
+    [productos, stock, proveedores] = await Promise.all([listarProductos(db), stockActualDe(db), listarProveedores(db)]);
     cargando = false;
   }
   cargar();
 
   const nombresSalvo = (id?: string) => productos.filter((p) => p.id !== id).map((p) => p.nombre);
   const stockDe = (p: Producto) => stock.get(p.id) ?? 0;
+  const proveedorPorId = $derived(new Map(proveedores.map((p) => [p.id, p])));
+  const sinProveedor = $derived(productos.filter((p) => !p.proveedorId).length);
 
   async function agregar(datos: DatosProducto) {
     const p = await guardarProducto(db, { ...datos, id: newId(), actualizadoEn: '' });
@@ -110,11 +114,20 @@
 {#if mensaje}
   <p class="error" role="alert">{mensaje}</p>
 {/if}
+{#if !cargando && !proveedores.some((p) => p.activo)}
+  <p class="aviso">Cada producto necesita un proveedor: <a href="#/proveedores/nuevo">cargá un proveedor</a> antes de agregar productos.</p>
+{:else if sinProveedor}
+  <p class="aviso">
+    {sinProveedor === 1 ? 'Hay un producto' : `Hay ${sinProveedor} productos`} sin proveedor: editalos para elegirlo. Sus entradas no
+    suman a ninguna cuenta.
+  </p>
+{/if}
 
 <table class="tabla">
   <thead>
     <tr>
       <th>Nombre</th>
+      <th>Proveedor</th>
       <th>Unidad</th>
       <th class="num">Stock</th>
       <th class="num">Mínimo</th>
@@ -125,9 +138,9 @@
     </tr>
   </thead>
   <tbody>
-    <ProductoFila otrosNombres={nombresSalvo()} onguardar={agregar} />
+    <ProductoFila otrosNombres={nombresSalvo()} {proveedores} onguardar={agregar} />
     {#if cargando}
-      <tr><td colspan="8" class="muted">Cargando…</td></tr>
+      <tr><td colspan="9" class="muted">Cargando…</td></tr>
     {/if}
     {#each visibles as p (p.id)}
       {#if editando === p.id}
@@ -136,13 +149,16 @@
           stock={stockDe(p)}
           enfocar
           otrosNombres={nombresSalvo(p.id)}
+          {proveedores}
           onguardar={(d) => actualizar(p, d)}
           oncancelar={() => terminarEdicion(p.id)}
         />
       {:else}
         {@const n = p.activo ? nivel(stockDe(p), p.stockMinimo) : 'ok'}
+        {@const prov = p.proveedorId ? proveedorPorId.get(p.proveedorId) : undefined}
         <tr class={n} class:inactivo={!p.activo} ondblclick={() => (editando = p.id)}>
           <td><a href="#/stock/producto/{p.id}">{p.nombre}</a></td>
+          <td>{#if prov}<a href="#/proveedores/{prov.id}">{prov.nombre}</a>{:else}<span class="aviso">Sin proveedor</span>{/if}</td>
           <td>{p.unidad}</td>
           <td class="num fuerte" title={n === 'agotado' ? 'Sin stock' : n === 'bajo' ? 'Bajo el mínimo' : undefined}>
             {formatNumero(stockDe(p))}

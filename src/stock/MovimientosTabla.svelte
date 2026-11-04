@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { DB } from '../lib/db';
-  import { formatNumero } from '../lib/money';
+  import { formatNumero, formatPesos } from '../lib/money';
   import { formatFechaHora } from '../lib/texto';
   import { efecto } from './logic';
   import { anularMovimiento, borrarMovimiento } from './repo';
@@ -33,7 +33,8 @@
   async function anular(m: Movimiento, p?: Producto) {
     const de = p ? ` de "${p.nombre}"` : '';
     const texto = `¿Anular ${titulo(m).toLowerCase()}${de} (${signo(m)}) del ${formatFechaHora(m.fecha)}?`;
-    if (!confirm(`${texto}\nQueda en el historial, pero deja de contar para el stock.`)) return;
+    const cuenta = m.importe !== undefined ? '\nTambién deja de contar en la cuenta del proveedor.' : '';
+    if (!confirm(`${texto}\nQueda en el historial, pero deja de contar para el stock.${cuenta}`)) return;
     try {
       onanulado(await anularMovimiento(db, m.id));
       error = '';
@@ -81,7 +82,9 @@
             {#if p}<a href="#/stock/producto/{p.id}">{p.nombre}</a>{:else}<span class="muted">(borrado)</span>{/if}
           </td>
         {/if}
-        <td>{titulo(m)}</td>
+        <td>
+          {titulo(m)}{#if m.importe !== undefined}&nbsp;<a class="muted" href="#/proveedores/{m.proveedorId}" title="Suma a la cuenta del proveedor">({formatPesos(m.importe)})</a>{/if}
+        </td>
         <td class="num" class:fuerte={efecto(m) !== 0}>{signo(m)}</td>
         {#if conSaldo}<td class="num">{saldo === undefined ? '' : formatNumero(saldo)}</td>{/if}
         <td>{m.nota ?? ''}</td>

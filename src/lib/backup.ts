@@ -2,7 +2,8 @@
 
 import type { Insumo, PrecioHistorico, Receta, RecetaLinea } from '../costos/types';
 import { cambiosStock } from '../stock/repo';
-import type { Movimiento, Producto, Promo, Venta } from '../stock/types';
+import { MEDIOS_PAGO } from '../stock/proveedores';
+import type { Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
 import { idbRequest as req, type DB, type Registro, type StoreName } from './db';
 import { esUnidad, esUnidadBase } from './units';
 
@@ -11,10 +12,23 @@ export const FORMATO = 'mundana-backup';
 // 2: adds historialPrecios (v1 files are read with an empty history).
 // 3: adds ventas, and ventaId/precioUnitario on sale movements (older files are read with no sales).
 // 4: adds promos, promos on sales and promoId on their movements (older files are read with no promos).
-export const VERSION = 4;
+// 5: adds proveedores and operacionesProveedor, proveedorId on products, and proveedorId/importe on
+//    entries (older files are read with no suppliers).
+export const VERSION = 5;
 
 /** Data stores, in dependency order. `meta` (e.g. the last backup date) is not exported. */
-export const STORES = ['insumos', 'historialPrecios', 'recetas', 'recetaLineas', 'productos', 'promos', 'ventas', 'movimientos'] as const;
+export const STORES = [
+  'insumos',
+  'historialPrecios',
+  'recetas',
+  'recetaLineas',
+  'proveedores',
+  'productos',
+  'promos',
+  'ventas',
+  'movimientos',
+  'operacionesProveedor',
+] as const;
 export type StoreDatos = (typeof STORES)[number];
 
 export const NOMBRES: Record<StoreDatos, string> = {
@@ -22,10 +36,12 @@ export const NOMBRES: Record<StoreDatos, string> = {
   historialPrecios: 'Historial de precios',
   recetas: 'Recetas',
   recetaLineas: 'Líneas de receta',
+  proveedores: 'Proveedores',
   productos: 'Productos',
   promos: 'Promos',
   ventas: 'Ventas',
   movimientos: 'Movimientos de stock',
+  operacionesProveedor: 'Operaciones con proveedores',
 };
 
 export interface Datos {
@@ -33,10 +49,12 @@ export interface Datos {
   historialPrecios: PrecioHistorico[];
   recetas: Receta[];
   recetaLineas: RecetaLinea[];
+  proveedores: Proveedor[];
   productos: Producto[];
   promos: Promo[];
   ventas: Venta[];
   movimientos: Movimiento[];
+  operacionesProveedor: OperacionProveedor[];
 }
 
 export interface Backup {
@@ -147,6 +165,9 @@ const numero: Chequeo = (v) => typeof v === 'number' && Number.isFinite(v);
 const noNegativo: Chequeo = (v) => numero(v) && (v as number) >= 0;
 const positivo: Chequeo = (v) => numero(v) && (v as number) > 0;
 const centavos: Chequeo = (v) => Number.isInteger(v) && (v as number) >= 0;
+const centavosPositivos: Chequeo = (v) => Number.isInteger(v) && (v as number) > 0;
+const centavosNoCero: Chequeo = (v) => Number.isInteger(v) && v !== 0;
+const diasEnteros: Chequeo = (v) => Number.isInteger(v) && (v as number) >= 0;
 const booleano: Chequeo = (v) => typeof v === 'boolean';
 const fecha: Chequeo = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v));
 const porcentaje: Chequeo = (v) => noNegativo(v) && (v as number) <= 100;
@@ -159,6 +180,7 @@ const unoDe =
   (...xs: unknown[]): Chequeo =>
   (v) =>
     xs.includes(v);
+const ausente: Chequeo = (v) => v === undefined;
 
 type Esquema = Record<string, Chequeo>;
 
@@ -200,7 +222,38 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
       if (r.tipo === 'costoFijo') return { ...LINEA, descripcion: texto, monto: centavos };
       return 'tipo de línea desconocido';
     case 'productos':
-      return { ...REGISTRO, nombre: texto, unidad: texto, stockMinimo: noNegativo, costo: opcional(centavos), precioVenta: opcional(centavos), activo: booleano };
+      return {
+        ...REGISTRO,
+        nombre: texto,
+        unidad: texto,
+        stockMinimo: noNegativo,
+        costo: opcional(centavos),
+        precioVenta: opcional(centavos),
+        activo: booleano,
+        proveedorId: opcional(noVacio),
+      };
+    case 'proveedores':
+      return {
+        ...REGISTRO,
+        nombre: texto,
+        plazoDias: diasEnteros,
+        activo: booleano,
+        telefono: opcional(texto),
+        rut: opcional(texto),
+        cuenta: opcional(texto),
+        nota: opcional(texto),
+      };
+    case 'operacionesProveedor':
+      return {
+        ...REGISTRO,
+        proveedorId: noVacio,
+        tipo: unoDe('compra', 'pago', 'ajuste'),
+        importe: r.tipo === 'ajuste' ? centavosNoCero : centavosPositivos,
+        fecha,
+        medioPago: r.tipo === 'pago' ? unoDe(...MEDIOS_PAGO.map((m) => m.id)) : ausente,
+        nota: opcional(texto),
+        anuladoEn: opcional(fecha),
+      };
     case 'promos':
       return { ...REGISTRO, nombre: texto, precio: centavos, activo: booleano, componentes: listaDe(COMPONENTE, { noVacia: true, unico: 'productoId' }) };
     case 'ventas':
@@ -214,9 +267,11 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
       };
     case 'movimientos': {
       // A sale line (with ventaId) must be a 'venta' and carry its unit price;
-      // a promo component (with promoId) must be a sale line with price 0.
+      // a promo component (with promoId) must be a sale line with price 0;
+      // only an entrada can add to a supplier's account, with both proveedorId and importe.
       const deVenta = r.ventaId !== undefined;
       const dePromo = r.promoId !== undefined;
+      const aCuenta = r.tipo === 'entrada' && (r.proveedorId !== undefined || r.importe !== undefined);
       return {
         ...REGISTRO,
         productoId: noVacio,
@@ -228,6 +283,8 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
         ventaId: dePromo ? noVacio : opcional(noVacio),
         precioUnitario: dePromo ? unoDe(0) : deVenta ? centavos : opcional(centavos),
         promoId: opcional(noVacio),
+        proveedorId: aCuenta ? noVacio : ausente,
+        importe: aCuenta ? centavos : ausente,
       };
     }
   }
@@ -264,6 +321,8 @@ export function leerBackup(contenido: string): Lectura {
   if (v === 1 && datos.historialPrecios === undefined) datos.historialPrecios = [];
   if ((v as number) < 3 && datos.ventas === undefined) datos.ventas = [];
   if ((v as number) < 4 && datos.promos === undefined) datos.promos = [];
+  if ((v as number) < 5 && datos.proveedores === undefined) datos.proveedores = [];
+  if ((v as number) < 5 && datos.operacionesProveedor === undefined) datos.operacionesProveedor = [];
 
   const ids = {} as Record<StoreDatos, Set<string>>;
   for (const s of STORES) {
@@ -303,6 +362,9 @@ export function leerBackup(contenido: string): Lectura {
   ref('recetaLineas', 'insumoId', 'insumos');
   ref('movimientos', 'productoId', 'productos');
   ref('movimientos', 'ventaId', 'ventas');
+  ref('productos', 'proveedorId', 'proveedores');
+  ref('movimientos', 'proveedorId', 'proveedores');
+  ref('operacionesProveedor', 'proveedorId', 'proveedores');
   // Inside lists: a promo's components → products; a sale's promos → promos.
   const refEnLista = (s: StoreDatos, lista: string, campo: string, destino: StoreDatos) => {
     const registros = datos[s];

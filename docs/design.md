@@ -3,7 +3,7 @@
 A web app for a food shop, with two independent modules:
 
 1. **Recipe costing** (costos): what it costs to make a product, to decide what to sell it for.
-2. **Stock**: record stock, register sales (one or more products, with a % discount) that take it down, and warn when it runs low. Sales by day are the app's home page.
+2. **Stock**: record stock, register sales (one or more products, with a % discount) that take it down, and warn when it runs low. Sales by day are the app's home page. Each product has a supplier, with an account of what is owed to it and warnings when a payment is due.
 
 The UI is in Spanish (Argentina); code identifiers follow the domain terms (`insumo`, `receta`, `producto`, `movimiento`…).
 
@@ -39,14 +39,18 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **historialPrecios** (price history): `insumoId`, `fecha`, `unidadBase`, `costoPorUnidadBase` (fractional cents). A new entry is added, in the same transaction as the ingredient, only when its cost per base unit changes.
 
 ### Stock
-- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta` (required on every save, zero allowed; products saved before it became required may lack it, the list and product page show them as "Sin precio" until edited, and backups without it still import), `activo`.
+- **productos**: `nombre`, `unidad` (free text: bottle, kg, pack), `stockMinimo`, `costo?` (per unit, typed by hand; there is no cost history and no cost per entry), `precioVenta` (required on every save, zero allowed; products saved before it became required may lack it, the list and product page show them as "Sin precio" until edited, and backups without it still import), `activo`, `proveedorId` (one fixed supplier per product, required on every save the same way: older products show as "Sin proveedor" until edited).
 - **promos**: `nombre` (unique among promos), `precio` (cents, zero allowed), `activo`, `componentes` (`[{ productoId, cantidad }]`, at least one, one entry per product, quantities > 0 and decimals allowed). A promo sells several products together at its own price; it has no stock of its own, unit or minimum.
 - **ventas** (sales): `fecha`, `descuentoPct` (0 to 100, decimals allowed, over the products sold on their own: not the promos), `nota?`, `anuladoEn?`, `promos?` (`[{ promoId, nombre, precio, cantidad }]`: the promos sold, one entry per promo, with name and price copied when sold). A sale has no product lines of its own: they are its movements.
 - **movimientos** (stock movements): `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad`, `fecha`, `nota?`, `anuladoEn?`, and on sale lines `ventaId` + `precioUnitario` (+ `promoId` on promo components).
   - `cantidad` is positive for entries and sales (the type gives the sign), and signed for adjustments.
   - A movement is never edited: cancelling ("anular") sets `anuladoEn`, so it stops counting but stays in the history. Only a voided movement can be deleted ("borrar"), which just takes it out of the history; a sale line only goes with its sale.
   - A sale line is a `venta` movement with the sale's `ventaId` and `fecha`, and `precioUnitario`: the product's sale price when it was sold (cents). Sales recorded before multi-product sales existed are `venta` movements without either; they still count for the stock.
+  - An `entrada` that adds to the supplier's account also has `proveedorId` (the product's supplier when it was registered, so changing the product's supplier later doesn't move old debt) and `importe` (cents, zero allowed: what that purchase cost). Both or neither; no other type has them.
   - A promo sold adds one sale line per component, with `promoId`, `precioUnitario` 0 (its price is in the sale's `promos`) and `cantidad` = the component's quantity × the promos sold. The same product sold on its own in that sale is a separate line with its price.
+
+- **proveedores** (suppliers): `nombre` (unique), `plazoDias` (payment term in whole days, 15 by default), `activo`, and optional text `telefono`, `rut`, `cuenta` (bank account number), `nota`.
+- **operacionesProveedor** (manual entries in a supplier's account): `proveedorId`, `tipo` (`compra` | `pago` | `ajuste`), `importe` (cents: positive for compra and pago, signed and non-zero for ajuste), `fecha`, `medioPago` (only, and always, on a pago: `efectivo` | `transferencia` | `debito` | `credito` | `cheque` | `otro`, a fixed list), `nota?`, `anuladoEn?`. Never edited: voided, then deletable, like movements.
 
 ### Other
 - **meta**: app bookkeeping, e.g. the date of the last backup. Not included in backups.
@@ -64,6 +68,9 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **A sale keeps the price it was sold at** (`precioUnitario` on each line), unlike recipe costs: changing a product's price doesn't rewrite past sales. The price comes from the product (it can't be typed in the sale); a product without a sale price can't be sold.
 - **A sale is voided as a whole**: voiding sets `anuladoEn` on the sale and on all its movements in one transaction. Its movements can't be voided one by one. To fix a sale, void it and enter it again.
 - **Only voided sales and movements can be deleted.** Deleting a voided sale deletes it and all its movements in one transaction. What is deleted no longer counted, so neither the stock nor the sales totals change; it only leaves the history.
+- **A supplier's balance is never stored**: it is the sum of its account (manual entries plus the entries that added to it). Voiding a stock entry that added to an account takes it out of both the stock and the account (it is one record).
+- **A supplier can't be deleted** while a product or an account line (even a voided one) refers to it; it can be deactivated. An inactive supplier isn't offered for products, but its account and payment warnings remain.
+- **An entry adds to the account only for a product with a supplier**, and only when the user leaves "Suma a la cuenta" checked (returns, gifts and purchases already entered by hand are unchecked).
 - **Stock alert**: an active product with stock ≤ its minimum is "low" (bajo); with stock ≤ 0 it is "out of stock" (sin stock).
 
 ## Formulas (costing)
@@ -88,6 +95,19 @@ valor total   = sum(valorStock) over every product, active or not
 ```
 
 Products with stock but no cost are left out of the total and counted, so the UI can say so.
+
+## Formulas (suppliers)
+
+```
+saldo        = sum(compras) + sum(entradas' importe) + sum(ajustes) - sum(pagos)    (not voided; negative = paid in advance)
+importe propuesto (entry form) = round(costo * cantidad)                           (editable; none without a cost)
+vencimiento  = local day of the purchase + plazoDias                                (computed: changing the term moves every due date)
+pendientes   = payments and negative adjustments pay the oldest debt first (date order); positive adjustments are debt in that
+               order too but never fall due; each compra/entrada not fully paid is pending for what is left
+vencido      = pending with vencimiento before today
+vence pronto = pending due today or within the next 3 days
+aviso        = a supplier (active or not) with something vencido or due soon; the nav badge counts these suppliers
+```
 
 ## Formulas (sales)
 
@@ -129,16 +149,23 @@ ahorro       = por separado - precio            (negative = the promo costs more
 - Sales by day: one row per day with sales, newest first, with the number of sales and the total; each day expands to its sales (time, products and promos, discount, total, note, "Anular"). Today starts expanded. Voided sales show struck through, with "Borrar" (asks first).
 - In the movement history, a sale's lines link to Ventas instead of offering "Anular" ("en promo" for promo components). Other voided movements offer "Borrar" (asks first).
 - Alerts panel and a low-stock counter badge in the navigation.
+
+### Suppliers
+- A top-level section (`#/proveedores`), with its own badge: the number of suppliers with payments overdue or due within 3 days (refreshed after every stock or supplier write, and on navigation since due dates move with the calendar).
+- List with balance, overdue amount, amount due soon, next due date, term, number of products and active; overdue rows in red, due-soon ones highlighted; total owed above it; search and "show inactive" (inactive suppliers with payments due always show). Deleting is blocked, with a message, while something refers to the supplier.
+- Each supplier opens in its page (`#/proveedores/<id>`, `nuevo` for a new one): its data (name, term, phone, RUT, account number, notes, active) saved with "Guardar datos"; balance, overdue, due soon and next due date; a quick form for compra / pago (with its payment method) / ajuste (signed); the account newest first with running balance, each purchase's due date and what is left of it, and "Anular" / "Borrar" (stock entries here void the movement itself); and the supplier's products.
+- Products: a supplier column and selector (active suppliers, plus the product's own if inactive); a notice when there are no suppliers yet, or products without one.
+- Entry form: for a product with a supplier, a "Suma a la cuenta de <supplier>" checkbox (checked by default) and the amount, proposed as cost × quantity until typed over (required while checked). The movement history shows the amount next to such entries, linking to the supplier.
 - Per-product movement history, with cancelling.
 
 ### Backup
 - **Export** everything to one JSON file, `ona-YYYY-MM-DD.json`:
   `{ formato: 'mundana-backup', version, exportadoEn, datos: { <every data store> } }`.
-  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos.
-- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale, promo components → product, a sale's promos → promo); a movement with a `ventaId` must be a `venta` with a `precioUnitario`, and one with a `promoId` must also have price 0 and belong to a sale that includes that promo. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
+  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos. Version 5 added `proveedores` and `operacionesProveedor` (and `proveedorId` on products, `proveedorId` + `importe` on entries); older files import with no suppliers.
+- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale, promo components → product, a sale's promos → promo, products / entries / account entries → supplier); a movement with a `ventaId` must be a `venta` with a `precioUnitario`, and one with a `promoId` must also have price 0 and belong to a sale that includes that promo. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
 - The backup page ends with the running release (`package.json` `version`, set by `release.py`), to tell which version is deployed.
 - The date of the last backup is kept, and the app warns when there is data and no backup in more than **7 days**.
-- **CSV** exports of products (with cost, profit, margin and stock value), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
+- **CSV** exports of products (with supplier, cost, profit, margin and stock value), suppliers (with balance, overdue and due soon), every supplier's account (with running balance), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
 - The app asks for persistent storage (`navigator.storage.persist()`) at startup and again when installed, and says so if the browser doesn't grant it.
 
 ### Offline and updates (PWA)
@@ -150,7 +177,7 @@ ahorro       = por separado - precio            (negative = the promo costs more
 - No service worker in development (`npm run dev`).
 
 ### Keyboard and usability
-- Single-key shortcuts, active only outside text fields and without Ctrl/Alt/Cmd: `v` Sales (home), `r` Recipes, `i` Ingredients, `p` Products, `m` Movements, `a` Alerts, `o` Promos, `b` Backup, `n` the page's "new" field, `/` search, `?` help (Esc closes it).
+- Single-key shortcuts, active only outside text fields and without Ctrl/Alt/Cmd: `v` Sales (home), `r` Recipes, `i` Ingredients, `p` Products, `m` Movements, `a` Alerts, `o` Promos, `e` Suppliers, `b` Backup, `n` the page's "new" field, `/` search, `?` help (Esc closes it).
 - Enter saves a row or movement (in a sale: adds the product, or registers the sale from the discount or note), Esc cancels a row edit. After saving or cancelling, focus returns to the row; when a save fails, it goes to the first invalid field.
 - Error messages name the field ("Precio de compra: No puede ser negativo") and update while typing after the first save attempt.
 - Numbers are typed as text and parsed Argentine style (`1.234,56`; a lone `.` followed by 3 digits is a thousands separator).
@@ -161,7 +188,7 @@ Development happens in a Docker container with **no browser, and none can be ins
 
 **Design principle**: all logic lives in plain TypeScript modules outside the Svelte components. Components only display data and call into that logic.
 
-- **Pure logic** (units, money, costing, stock, sales, validation, shortcuts, service worker strategies): unit tests with Vitest. This is most of the coverage.
+- **Pure logic** (units, money, costing, stock, sales, supplier accounts and due dates, validation, shortcuts, service worker strategies): unit tests with Vitest. This is most of the coverage.
 - **IndexedDB**: `fake-indexeddb` covers the wrapper, schema migrations, transactions and the repositories.
 - **Backup**: a round-trip test (export, wipe, import, compare), plus validation tests with malformed JSON, unknown versions, missing fields and dangling references.
 - **Svelte components**: not tested directly; keep moving logic out of them instead.

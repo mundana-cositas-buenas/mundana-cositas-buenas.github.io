@@ -2,13 +2,14 @@
   import { tick } from 'svelte';
   import { describirErrores, type Errores } from '../lib/campos';
   import { formatNumero } from '../lib/money';
-  import type { Producto } from './types';
+  import type { Producto, Proveedor } from './types';
   import { avisosProducto, ETIQUETAS_PRODUCTO, productoFormDesde, productoVacio, validarProducto, type DatosProducto, type ProductoForm } from './validar';
 
   let {
     inicial,
     stock,
     otrosNombres,
+    proveedores,
     onguardar,
     oncancelar,
     enfocar = false,
@@ -16,6 +17,7 @@
     inicial?: Producto;
     stock?: number;
     otrosNombres: string[];
+    proveedores: Proveedor[];
     onguardar: (datos: DatosProducto) => Promise<void>;
     oncancelar?: () => void;
     enfocar?: boolean;
@@ -35,6 +37,8 @@
     ...(intentado && !validado.ok ? validado.errores : {}),
     ...(errorGeneral ? { general: errorGeneral } : {}),
   });
+  // Active suppliers, plus the product's own one if it was deactivated.
+  const elegibles = $derived(proveedores.filter((p) => p.activo || p.id === inicial?.proveedorId));
   // Warnings don't block saving, so they show right away.
   const avisos = $derived(validado.ok ? avisosProducto(validado.datos) : {});
 
@@ -90,6 +94,14 @@
       title={errores.nombre}
     />
   </td>
+  <td>
+    <select bind:value={form.proveedorId} aria-label="Proveedor" aria-invalid={!!errores.proveedorId} title={errores.proveedorId}>
+      <option value="">{elegibles.length ? 'Proveedor…' : 'Sin proveedores'}</option>
+      {#each elegibles as p (p.id)}
+        <option value={p.id}>{p.nombre}{p.activo ? '' : ' (inactivo)'}</option>
+      {/each}
+    </select>
+  </td>
   <td><input class="corto" bind:value={form.unidad} placeholder="u" aria-label="Unidad" /></td>
   <td class="num muted">{stock === undefined ? '' : formatNumero(stock)}</td>
   <td class="num">
@@ -135,10 +147,10 @@
 </tr>
 {#if Object.keys(errores).length}
   <tr class="errores">
-    <td colspan="8">{describirErrores(errores, ETIQUETAS_PRODUCTO)}</td>
+    <td colspan="9">{describirErrores(errores, ETIQUETAS_PRODUCTO)}</td>
   </tr>
 {:else if Object.keys(avisos).length}
   <tr class="avisos">
-    <td colspan="8">{describirErrores(avisos, ETIQUETAS_PRODUCTO)}</td>
+    <td colspan="9">{describirErrores(avisos, ETIQUETAS_PRODUCTO)}</td>
   </tr>
 {/if}

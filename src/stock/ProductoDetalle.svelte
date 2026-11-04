@@ -4,13 +4,14 @@
   import { historial, nivel, rentabilidad, stockActual, valorStock } from './logic';
   import MovimientoRapido from './MovimientoRapido.svelte';
   import MovimientosTabla from './MovimientosTabla.svelte';
-  import { movimientosDe, obtenerProducto } from './repo';
-  import type { Movimiento, Producto } from './types';
+  import { listarProveedores, movimientosDe, obtenerProducto } from './repo';
+  import type { Movimiento, Producto, Proveedor } from './types';
 
   let { db, id }: { db: DB; id: string } = $props();
 
   let producto = $state<Producto | undefined>();
   let movimientos = $state<Movimiento[]>([]);
+  let proveedores = $state<Proveedor[]>([]);
   let cargando = $state(true);
 
   const stock = $derived(stockActual(movimientos));
@@ -18,10 +19,11 @@
   const filas = $derived(historial(movimientos));
   const renta = $derived(producto && rentabilidad(producto));
   const valor = $derived(producto && valorStock(stock, producto.costo));
+  const proveedor = $derived(producto?.proveedorId ? proveedores.find((p) => p.id === producto!.proveedorId) : undefined);
 
   async function cargar(id: string) {
     cargando = true;
-    [producto, movimientos] = await Promise.all([obtenerProducto(db, id), movimientosDe(db, id)]);
+    [producto, movimientos, proveedores] = await Promise.all([obtenerProducto(db, id), movimientosDe(db, id), listarProveedores(db)]);
     cargando = false;
   }
   $effect(() => {
@@ -37,6 +39,8 @@
   <p><a href="#/stock">← Productos</a></p>
   <h2>{producto.nombre}{#if !producto.activo} <span class="muted">(inactivo)</span>{/if}</h2>
   <dl class="resumen">
+    <dt>Proveedor</dt>
+    <dd>{#if proveedor}<a href="#/proveedores/{proveedor.id}">{proveedor.nombre}</a>{:else}<span class="aviso">Sin proveedor</span>{/if}</dd>
     <dt>Stock</dt>
     <dd class="fuerte {estado}">{formatNumero(stock)} {producto.unidad}</dd>
     <dt>Mínimo</dt>
@@ -65,6 +69,7 @@
     <MovimientoRapido
       {db}
       productos={[producto]}
+      {proveedores}
       stock={new Map([[producto.id, stock]])}
       fijo={producto}
       onregistrado={(m) => (movimientos = [...movimientos, m])}

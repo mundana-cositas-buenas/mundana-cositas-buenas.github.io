@@ -3,8 +3,9 @@
 import { porNombre } from '../lib/campos';
 import { idbRequest as req, newId, type DB } from '../lib/db';
 import { alertas, porFecha, stockPorProducto, type Alerta } from './logic';
-import type { Movimiento, Producto, Promo, PromoVendida, Venta } from './types';
-import type { DatosMovimiento, DatosVenta } from './validar';
+import { asientos, asientosPorProveedor, avisosPago, type AvisoPago, type Asiento } from './proveedores';
+import type { Movimiento, OperacionProveedor, Producto, Promo, PromoVendida, Proveedor, Venta } from './types';
+import type { DatosMovimiento, DatosOperacion, DatosVenta } from './validar';
 import { agruparVentas, SIN_PRECIO, type VentaConLineas } from './ventas';
 
 /** Fires 'cambio' after every stock write, so the nav badge can refresh. */
@@ -98,12 +99,23 @@ export async function cargarAlertas(db: DB): Promise<Alerta[]> {
   return alertas(productos, stock);
 }
 
-/** Records a movement dated now; fails if the product doesn't exist. */
+/**
+ * Records a movement dated now; fails if the product doesn't exist. An entrada with an `importe`
+ * adds to the account of the product's supplier (kept on the movement); fails if it has none.
+ */
 export async function registrarMovimiento(db: DB, productoId: string, datos: DatosMovimiento, fecha = new Date()): Promise<Movimiento> {
   const ahora = new Date().toISOString();
   const m: Movimiento = { ...datos, id: newId(), actualizadoEn: ahora, productoId, fecha: fecha.toISOString() };
-  await db.tx(['productos', 'movimientos'], 'readwrite', async (tx) => {
-    if (!(await req(tx.objectStore('productos').count(productoId)))) throw new Error('El producto no existe');
+  if (m.importe !== undefined && m.tipo !== 'entrada') throw new Error('Solo una entrada puede sumar a la cuenta del proveedor');
+  await db.tx(['productos', 'proveedores', 'movimientos'], 'readwrite', async (tx) => {
+    const p = await req<Producto | undefined>(tx.objectStore('productos').get(productoId));
+    if (!p) throw new Error('El producto no existe');
+    if (m.importe !== undefined) {
+      if (!p.proveedorId || !(await req(tx.objectStore('proveedores').count(p.proveedorId)))) {
+        throw new Error(`"${p.nombre}" no tiene proveedor: no puede sumar a ninguna cuenta`);
+      }
+      m.proveedorId = p.proveedorId;
+    }
     await req(tx.objectStore('movimientos').put(m));
   });
   avisar();
@@ -304,4 +316,101 @@ export async function borrarPromo(db: DB, id: string): Promise<void> {
     if (n) throw new PromoEnVentas(n);
     await req(tx.objectStore('promos').delete(id));
   });
+}
+
+// --- Suppliers ---
+
+export async function listarProveedores(db: DB): Promise<Proveedor[]> {
+  return (await db.list<Proveedor>('proveedores')).sort(porNombre);
+}
+
+export function obtenerProveedor(db: DB, id: string): Promise<Proveedor | undefined> {
+  return db.get<Proveedor>('proveedores', id);
+}
+
+export async function guardarProveedor(db: DB, p: Proveedor): Promise<Proveedor> {
+  const r = await db.put('proveedores', p);
+  avisar();
+  return r;
+}
+
+/** The account lines of one supplier, oldest first. */
+export function cuentaDe(db: DB, proveedorId: string): Promise<Asiento[]> {
+  return db.tx(['operacionesProveedor', 'movimientos'], 'readonly', async (tx) => {
+    const ops = await req<OperacionProveedor[]>(tx.objectStore('operacionesProveedor').index('proveedorId').getAll(proveedorId));
+    const movs = await req<Movimiento[]>(tx.objectStore('movimientos').index('proveedorId').getAll(proveedorId));
+    return asientos(ops, movs);
+  });
+}
+
+/** The account lines of every supplier, by supplier id (suppliers without any are missing). */
+export function cuentas(db: DB): Promise<Map<string, Asiento[]>> {
+  return db.tx(['operacionesProveedor', 'movimientos'], 'readonly', async (tx) => {
+    const ops = await req<OperacionProveedor[]>(tx.objectStore('operacionesProveedor').getAll());
+    const movs = await req<Movimiento[]>(tx.objectStore('movimientos').index('proveedorId').getAll());
+    return asientosPorProveedor(ops, movs);
+  });
+}
+
+export async function cargarAvisosPago(db: DB, ahora = new Date()): Promise<AvisoPago[]> {
+  const [proveedores, porProveedor] = await Promise.all([listarProveedores(db), cuentas(db)]);
+  return avisosPago(proveedores, porProveedor, ahora);
+}
+
+/** Records a manual account entry dated now; fails if the supplier doesn't exist. */
+export async function registrarOperacion(db: DB, proveedorId: string, datos: DatosOperacion, fecha = new Date()): Promise<OperacionProveedor> {
+  const ahora = new Date().toISOString();
+  const o: OperacionProveedor = { ...datos, id: newId(), actualizadoEn: ahora, proveedorId, fecha: fecha.toISOString() };
+  await db.tx(['proveedores', 'operacionesProveedor'], 'readwrite', async (tx) => {
+    if (!(await req(tx.objectStore('proveedores').count(proveedorId)))) throw new Error('El proveedor no existe');
+    await req(tx.objectStore('operacionesProveedor').put(o));
+  });
+  avisar();
+  return o;
+}
+
+/** Voids an account entry: it stays in the account but no longer counts. */
+export async function anularOperacion(db: DB, id: string): Promise<OperacionProveedor> {
+  const r = await db.tx('operacionesProveedor', 'readwrite', async (tx) => {
+    const store = tx.objectStore('operacionesProveedor');
+    const o = await req<OperacionProveedor | undefined>(store.get(id));
+    if (!o) throw new Error('La operación no existe');
+    if (o.anuladoEn) throw new Error('La operación ya estaba anulada');
+    const ahora = new Date().toISOString();
+    const anulada: OperacionProveedor = { ...o, anuladoEn: ahora, actualizadoEn: ahora };
+    await req(store.put(anulada));
+    return anulada;
+  });
+  avisar();
+  return r;
+}
+
+/** Deletes a voided account entry for good. It no longer counted, so the balance doesn't change. */
+export async function borrarOperacion(db: DB, id: string): Promise<void> {
+  await db.tx('operacionesProveedor', 'readwrite', async (tx) => {
+    const store = tx.objectStore('operacionesProveedor');
+    const o = await req<OperacionProveedor | undefined>(store.get(id));
+    if (!o) throw new Error('La operación no existe');
+    if (!o.anuladoEn) throw new Error('Solo se puede borrar una operación anulada');
+    await req(store.delete(id));
+  });
+  avisar();
+}
+
+export class ProveedorEnUso extends Error {
+  constructor() {
+    super('No se puede borrar: tiene productos o movimientos en su cuenta. Desmarcalo como activo en lugar de borrarlo.');
+  }
+}
+
+/** Deletes a supplier; throws ProveedorEnUso (and deletes nothing) if a product or an account line refers to it. */
+export async function borrarProveedor(db: DB, id: string): Promise<void> {
+  await db.tx(['productos', 'operacionesProveedor', 'movimientos', 'proveedores'], 'readwrite', async (tx) => {
+    const productos = await req<Producto[]>(tx.objectStore('productos').getAll());
+    const ops = await req(tx.objectStore('operacionesProveedor').index('proveedorId').count(id));
+    const movs = await req(tx.objectStore('movimientos').index('proveedorId').count(id));
+    if (ops || movs || productos.some((p) => p.proveedorId === id)) throw new ProveedorEnUso();
+    await req(tx.objectStore('proveedores').delete(id));
+  });
+  avisar();
 }

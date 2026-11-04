@@ -25,12 +25,41 @@ describe('openDB', () => {
     const db = await fresh();
     expect(db.version).toBe(DB_VERSION);
     expect([...db.idb.objectStoreNames].sort()).toEqual(
-      ['historialPrecios', 'insumos', 'meta', 'movimientos', 'productos', 'promos', 'recetaLineas', 'recetas', 'ventas'].sort(),
+      [
+        'historialPrecios',
+        'insumos',
+        'meta',
+        'movimientos',
+        'operacionesProveedor',
+        'productos',
+        'promos',
+        'proveedores',
+        'recetaLineas',
+        'recetas',
+        'ventas',
+      ].sort(),
     );
     const lineas = db.idb.transaction('recetaLineas').objectStore('recetaLineas');
     expect([...lineas.indexNames].sort()).toEqual(['insumoId', 'recetaId']);
     const movs = db.idb.transaction('movimientos').objectStore('movimientos');
-    expect([...movs.indexNames].sort()).toEqual(['productoId', 'ventaId']);
+    expect([...movs.indexNames].sort()).toEqual(['productoId', 'proveedorId', 'ventaId']);
+    const ops = db.idb.transaction('operacionesProveedor').objectStore('operacionesProveedor');
+    expect([...ops.indexNames]).toEqual(['proveedorId']);
+  });
+
+  it('v6 adds suppliers and keeps the existing products and movements', async () => {
+    const name = `v6-${n++}`;
+    const viejo = await openDB(name, MIGRATIONS.slice(0, 5));
+    await viejo.put('productos', { id: 'p1', actualizadoEn: '', nombre: 'Miel', unidad: 'u', stockMinimo: 0, activo: true });
+    await viejo.put('movimientos', { id: 'm1', actualizadoEn: '', productoId: 'p1', tipo: 'entrada', cantidad: 1, fecha: '' });
+    viejo.close();
+    const db = await openDB(name);
+    expect(db.version).toBe(6);
+    expect(await db.list('proveedores')).toEqual([]);
+    expect((await db.list('productos')).map((p) => p.id)).toEqual(['p1']);
+    expect(await db.listBy('movimientos', 'proveedorId', 'x')).toEqual([]);
+    expect(await db.listBy('movimientos', 'productoId', 'p1')).toHaveLength(1);
+    db.close();
   });
 
   it('v4 adds sales and keeps the existing movements', async () => {

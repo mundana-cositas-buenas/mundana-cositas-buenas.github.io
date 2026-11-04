@@ -3,7 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { newId, openDB, type DB } from '../lib/db';
 import {
   anularMovimiento,
+  anularOperacion,
   anularVenta,
+  borrarOperacion,
+  borrarProveedor,
+  cargarAvisosPago,
+  cuentaDe,
+  cuentas,
+  guardarProveedor,
+  listarProveedores,
+  ProveedorEnUso,
+  registrarOperacion,
   borrarMovimiento,
   borrarProducto,
   borrarPromo,
@@ -28,7 +38,7 @@ import {
   ventasConProducto,
   ventasConPromo,
 } from './repo';
-import type { Producto, Promo } from './types';
+import type { Producto, Promo, Proveedor } from './types';
 
 let n = 0;
 const open: DB[] = [];
@@ -383,5 +393,87 @@ describe('promos', () => {
     expect(await listarMovimientos(db)).toEqual([]);
     await borrarPromo(db, combo.id);
     expect(await listarPromos(db)).toEqual([]);
+  });
+});
+
+describe('proveedores', () => {
+  const proveedor = (nombre: string, plazoDias = 15): Proveedor => ({ id: newId(), actualizadoEn: '', nombre, plazoDias, activo: true });
+
+  it('lists suppliers sorted by name and notifies the nav badge on every write', async () => {
+    const db = await fresh();
+    const escucha = vi.fn();
+    cambiosStock.addEventListener('cambio', escucha);
+    const pv = await guardarProveedor(db, proveedor('Zeta'));
+    await guardarProveedor(db, proveedor('apícola'));
+    const o = await registrarOperacion(db, pv.id, { tipo: 'compra', importe: 100 });
+    await anularOperacion(db, o.id);
+    await borrarOperacion(db, o.id);
+    cambiosStock.removeEventListener('cambio', escucha);
+    expect((await listarProveedores(db)).map((p) => p.nombre)).toEqual(['apícola', 'Zeta']);
+    expect(escucha).toHaveBeenCalledTimes(5);
+  });
+
+  it('keeps an account of manual entries and the entries of its products that add to it', async () => {
+    const db = await fresh();
+    const pv = await guardarProveedor(db, proveedor('Apícola'));
+    const miel = await guardarProducto(db, { ...producto('miel'), proveedorId: pv.id });
+    await registrarOperacion(db, pv.id, { tipo: 'compra', importe: 10000, nota: 'f. 1' }, t(1));
+    const e = await registrarMovimiento(db, miel.id, { tipo: 'entrada', cantidad: 2, importe: 3000 }, t(2));
+    expect(e).toMatchObject({ proveedorId: pv.id, importe: 3000 });
+    // Unchecked: no importe, not part of the account.
+    await registrarMovimiento(db, miel.id, { tipo: 'entrada', cantidad: 1 }, t(3));
+    await registrarOperacion(db, pv.id, { tipo: 'pago', importe: 4000, medioPago: 'efectivo' }, t(4));
+    const cuenta = await cuentaDe(db, pv.id);
+    expect(cuenta.map((a) => a.tipo)).toEqual(['compra', 'entrada', 'pago']);
+    expect((await cuentas(db)).get(pv.id)).toEqual(cuenta);
+    expect((await stockActualDe(db)).get(miel.id)).toBe(3);
+  });
+
+  it('voiding an entry that added to the account takes it out of both the stock and the account', async () => {
+    const db = await fresh();
+    const pv = await guardarProveedor(db, proveedor('Apícola', 0));
+    const miel = await guardarProducto(db, { ...producto('miel'), proveedorId: pv.id });
+    const e = await registrarMovimiento(db, miel.id, { tipo: 'entrada', cantidad: 2, importe: 3000 }, new Date(2026, 0, 1));
+    expect((await cargarAvisosPago(db, new Date(2026, 0, 5))).map((a) => a.estado.vencido)).toEqual([3000]);
+    await anularMovimiento(db, e.id);
+    expect(await cargarAvisosPago(db, new Date(2026, 0, 5))).toEqual([]);
+    expect((await stockActualDe(db)).get(miel.id)).toBe(0);
+  });
+
+  it('refuses an importe on something other than an entrada, or for a product without supplier', async () => {
+    const db = await fresh();
+    const sin = await guardarProducto(db, producto('sin'));
+    await expect(registrarMovimiento(db, sin.id, { tipo: 'entrada', cantidad: 1, importe: 5 })).rejects.toThrow('no tiene proveedor');
+    const pv = await guardarProveedor(db, proveedor('Apícola'));
+    const con = await guardarProducto(db, { ...producto('con'), proveedorId: pv.id });
+    await expect(registrarMovimiento(db, con.id, { tipo: 'ajuste', cantidad: 1, importe: 5 })).rejects.toThrow('Solo una entrada');
+    expect(await listarMovimientos(db)).toEqual([]);
+  });
+
+  it('voids an operation once, deletes it only once voided, and refuses unknown suppliers', async () => {
+    const db = await fresh();
+    const pv = await guardarProveedor(db, proveedor('Apícola'));
+    const o = await registrarOperacion(db, pv.id, { tipo: 'ajuste', importe: -50 });
+    await expect(borrarOperacion(db, o.id)).rejects.toThrow('Solo se puede borrar una operación anulada');
+    expect((await anularOperacion(db, o.id)).anuladoEn).toBeTruthy();
+    await expect(anularOperacion(db, o.id)).rejects.toThrow('ya estaba anulada');
+    await borrarOperacion(db, o.id);
+    expect(await cuentaDe(db, pv.id)).toEqual([]);
+    await expect(registrarOperacion(db, 'nada', { tipo: 'compra', importe: 1 })).rejects.toThrow('no existe');
+  });
+
+  it('deletes a supplier only when nothing refers to it', async () => {
+    const db = await fresh();
+    const conProducto = await guardarProveedor(db, proveedor('A'));
+    await guardarProducto(db, { ...producto('miel'), proveedorId: conProducto.id });
+    await expect(borrarProveedor(db, conProducto.id)).rejects.toThrow(ProveedorEnUso);
+    const conCuenta = await guardarProveedor(db, proveedor('B'));
+    const o = await registrarOperacion(db, conCuenta.id, { tipo: 'compra', importe: 1 });
+    await anularOperacion(db, o.id);
+    // Even voided, the line is still in the account.
+    await expect(borrarProveedor(db, conCuenta.id)).rejects.toThrow(ProveedorEnUso);
+    const libre = await guardarProveedor(db, proveedor('C'));
+    await borrarProveedor(db, libre.id);
+    expect((await listarProveedores(db)).map((p) => p.nombre)).toEqual(['A', 'B']);
   });
 });

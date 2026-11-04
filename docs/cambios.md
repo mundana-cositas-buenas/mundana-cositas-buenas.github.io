@@ -1,6 +1,3 @@
-* poder llevar un estado de cuenta por proveedor de producto
-  * poder cargar alertas para avisar que hay que pagarle al proveedor
-
 * poder crear grupos/categorias de productos para tener una mejor visibilidad de la información
 
 * podemos hacer el stock de un producto editable desde la vista de productos en el stock?

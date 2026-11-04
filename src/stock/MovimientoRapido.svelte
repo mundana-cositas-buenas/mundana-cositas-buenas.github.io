@@ -1,21 +1,25 @@
 <script lang="ts">
+  import { describirErrores } from '../lib/campos';
   import type { DB } from '../lib/db';
-  import { formatNumero } from '../lib/money';
+  import { formatNumero, parseDecimal, pesosEditable } from '../lib/money';
   import { buscarPorNombre } from '../lib/texto';
   import { efecto } from './logic';
+  import { importePropuesto } from './proveedores';
   import { registrarMovimiento } from './repo';
-  import type { Movimiento, Producto, TipoMovimiento } from './types';
-  import { TIPOS_RAPIDOS, validarMovimiento } from './validar';
+  import type { Movimiento, Producto, Proveedor, TipoMovimiento } from './types';
+  import { ETIQUETAS_MOVIMIENTO, TIPOS_RAPIDOS, validarMovimiento } from './validar';
 
   let {
     db,
     productos,
+    proveedores,
     stock,
     fijo,
     onregistrado,
   }: {
     db: DB;
     productos: Producto[];
+    proveedores: Proveedor[];
     stock: ReadonlyMap<string, number>;
     fijo?: Producto; // the product is fixed (product history page)
     onregistrado: (m: Movimiento) => void;
@@ -29,10 +33,22 @@
   let guardando = $state(false);
   let productoInput: HTMLInputElement | undefined = $state();
   let cantidadInput: HTMLInputElement | undefined = $state();
+  let importeInput: HTMLInputElement | undefined = $state();
 
   const activos = $derived(productos.filter((p) => p.activo));
   const producto = $derived(fijo ?? buscarPorNombre(activos, productoTexto));
-  const v = $derived(validarMovimiento({ tipo, cantidad, nota }));
+
+  // An entrada of a product with a supplier adds to its account, unless unchecked; the amount is
+  // proposed as cost × quantity until typed over.
+  let aCuenta = $state(true);
+  let importeTexto = $state('');
+  let importeEditado = $state(false);
+  const proveedor = $derived(producto?.proveedorId ? proveedores.find((p) => p.id === producto!.proveedorId) : undefined);
+  const sumaACuenta = $derived(tipo === 'entrada' && !!proveedor && aCuenta);
+  const propuesto = $derived(producto && importePropuesto(producto.costo, parseDecimal(cantidad)));
+  const importe = $derived(importeEditado ? importeTexto : propuesto === undefined ? '' : pesosEditable(propuesto));
+
+  const v = $derived(validarMovimiento({ tipo, cantidad, nota, importe: sumaACuenta ? importe : undefined }));
   const actual = $derived(producto ? (stock.get(producto.id) ?? 0) : 0);
   const despues = $derived(v.ok ? actual + efecto(v.datos) : undefined);
 
@@ -49,8 +65,9 @@
       return;
     }
     if (!v.ok) {
-      error = `Cantidad: ${v.errores.cantidad}`;
-      cantidadInput?.focus();
+      error = describirErrores(v.errores, ETIQUETAS_MOVIMIENTO);
+      if (v.errores.cantidad) cantidadInput?.focus();
+      else importeInput?.focus();
       return;
     }
     if (despues !== undefined && despues < 0 && actual >= 0) {
@@ -66,6 +83,9 @@
       error = '';
       cantidad = '';
       nota = '';
+      importeTexto = '';
+      importeEditado = false;
+      aCuenta = true;
       if (fijo) cantidadInput?.focus();
       else {
         productoTexto = '';
@@ -120,6 +140,29 @@
     title={tipo === 'ajuste' ? 'Con signo: -2 descuenta, 3 suma' : undefined}
     aria-invalid={!!cantidad.trim() && !v.ok}
   />
+  {#if tipo === 'entrada' && proveedor}
+    <label title="Si la desmarcás, la entrada no suma deuda (devolución, regalo, o compra ya cargada en el proveedor)">
+      <input type="checkbox" bind:checked={aCuenta} /> Suma a la cuenta de {proveedor.nombre}
+    </label>
+    {#if aCuenta}
+      <input
+        bind:this={importeInput}
+        class="num"
+        inputmode="decimal"
+        value={importe}
+        oninput={(e) => {
+          importeTexto = e.currentTarget.value;
+          importeEditado = true;
+        }}
+        placeholder="$ importe"
+        aria-label="Importe"
+        title={importeEditado ? undefined : 'Propuesto: costo del producto × cantidad'}
+        aria-invalid={!v.ok && !!v.errores.importe && !!cantidad.trim()}
+      />
+    {/if}
+  {:else if tipo === 'entrada' && producto && !proveedor}
+    <span class="aviso" title="Elegile un proveedor en la lista de productos">Sin proveedor: no suma a ninguna cuenta</span>
+  {/if}
   <input bind:value={nota} placeholder="Nota (opcional)" aria-label="Nota" />
   <button type="submit" disabled={guardando}>Registrar</button>
   <span class="muted">
