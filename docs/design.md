@@ -44,7 +44,7 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **ventas** (sales): `fecha`, `descuentoPct` (0 to 100, decimals allowed, over the products sold on their own: not the promos), `nota?`, `anuladoEn?`, `promos?` (`[{ promoId, nombre, precio, cantidad }]`: the promos sold, one entry per promo, with name and price copied when sold). A sale has no product lines of its own: they are its movements.
 - **movimientos** (stock movements): `productoId`, `tipo` (`entrada` | `venta` | `ajuste`), `cantidad`, `fecha`, `nota?`, `anuladoEn?`, and on sale lines `ventaId` + `precioUnitario` (+ `promoId` on promo components).
   - `cantidad` is positive for entries and sales (the type gives the sign), and signed for adjustments.
-  - A movement is never edited or deleted on its own: cancelling ("anular") sets `anuladoEn`, so it stops counting but stays in the history.
+  - A movement is never edited: cancelling ("anular") sets `anuladoEn`, so it stops counting but stays in the history. Only a voided movement can be deleted ("borrar"), which just takes it out of the history; a sale line only goes with its sale.
   - A sale line is a `venta` movement with the sale's `ventaId` and `fecha`, and `precioUnitario`: the product's sale price when it was sold (cents). Sales recorded before multi-product sales existed are `venta` movements without either; they still count for the stock.
   - A promo sold adds one sale line per component, with `promoId`, `precioUnitario` 0 (its price is in the sale's `promos`) and `cantidad` = the component's quantity × the promos sold. The same product sold on its own in that sale is a separate line with its price.
 
@@ -58,11 +58,12 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **Current stock is never stored as an editable number.** It is the sum of the non-cancelled movements, so there is a full history and a sale can be undone. (If this ever gets slow, cache the total on the product and update it in the same transaction.)
 - **Units convert only within a family**: mass g↔kg, volume ml↔l, count u. Mixing families is an error shown on the recipe line, and the line is left out of the total.
 - **Deleting an ingredient used by a recipe is blocked.** Deleting an ingredient also deletes its price history.
-- **Deleting a product deletes its movements** (the UI suggests deactivating it instead). **A product that is in a sale**, even a voided one, **can't be deleted**, so past sales keep their totals; it can be deactivated. **A product that is in a promo can't be deleted** either: take it out of the promo, or deactivate it.
-- **A promo that was sold**, even in a voided sale, **can't be deleted**; it can be deactivated. A promo never sold can be deleted.
+- **Deleting a product deletes its movements** (the UI suggests deactivating it instead). **A product that is in a sale**, even a voided one (until that sale is deleted), **can't be deleted**, so past sales keep their totals; it can be deactivated. **A product that is in a promo can't be deleted** either: take it out of the promo, or deactivate it.
+- **A promo that was sold**, even in a voided sale (until that sale is deleted), **can't be deleted**; it can be deactivated. A promo never sold can be deleted.
 - **A promo is sold only while it and all its components are active** (and they exist). The components' sale prices don't matter: the promo has its own. A sale keeps the promo's name and price as they were, so editing the promo later doesn't rewrite past sales.
 - **A sale keeps the price it was sold at** (`precioUnitario` on each line), unlike recipe costs: changing a product's price doesn't rewrite past sales. The price comes from the product (it can't be typed in the sale); a product without a sale price can't be sold.
 - **A sale is voided as a whole**: voiding sets `anuladoEn` on the sale and on all its movements in one transaction. Its movements can't be voided one by one. To fix a sale, void it and enter it again.
+- **Only voided sales and movements can be deleted.** Deleting a voided sale deletes it and all its movements in one transaction. What is deleted no longer counted, so neither the stock nor the sales totals change; it only leaves the history.
 - **Stock alert**: an active product with stock ≤ its minimum is "low" (bajo); with stock ≤ 0 it is "out of stock" (sin stock).
 
 ## Formulas (costing)
@@ -125,8 +126,8 @@ ahorro       = por separado - precio            (negative = the promo costs more
 - A top-level section, first in the navigation and the page for an empty or unknown hash; the "Ona" name in the header links to it.
 - The sale being entered: product or promo (type to pick; promos are listed as "Promo: <name>") + quantity (empty = 1) + Enter adds a line; adding a product or promo already in the sale adds to its quantity; ✕ removes a line. It shows each line's price and amount (a promo line also lists its components), subtotal, discount (noting it doesn't apply to promos), promos and total. A promo with an inactive component can't be added. Discount % and an optional note, then "Registrar venta" (Enter in the discount or note also registers). One warning lists every product whose stock would go negative, counting promo components.
 - The draft survives going to other pages (not a reload), and counts as unsaved input for the update notice.
-- Sales by day: one row per day with sales, newest first, with the number of sales and the total; each day expands to its sales (time, products and promos, discount, total, note, "Anular"). Today starts expanded. Voided sales show struck through.
-- In the movement history, a sale's lines link to Ventas instead of offering "Anular" ("en promo" for promo components).
+- Sales by day: one row per day with sales, newest first, with the number of sales and the total; each day expands to its sales (time, products and promos, discount, total, note, "Anular"). Today starts expanded. Voided sales show struck through, with "Borrar" (asks first).
+- In the movement history, a sale's lines link to Ventas instead of offering "Anular" ("en promo" for promo components). Other voided movements offer "Borrar" (asks first).
 - Alerts panel and a low-stock counter badge in the navigation.
 - Per-product movement history, with cancelling.
 

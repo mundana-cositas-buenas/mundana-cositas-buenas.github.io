@@ -1,10 +1,3 @@
-* agregar una especie de "lock screen"
-  * cada tanto tiempo de inactividad, estaría bueno mostrar una pantalla de bloqueo de la app
-  * que pida un password para volver a usarla
-  * la password la setea el usuario, si está seteada se activa la lock screen, sino no
-
-* las ventas se pueden anular, pero podemos hacer que se puedan borrar también?
-
 * poder llevar un estado de cuenta por proveedor de producto
   * poder cargar alertas para avisar que hay que pagarle al proveedor
 
@@ -18,3 +11,8 @@
   * la idea es que sea más mouse friendly que ahora que es más teclado friendly, solo las ventas al menos
 
 * las recetas incluyen ahora el manejo de un porcentaje de merma de los ingredientes/insumos... saquemos eso completamente, no lo necesitamos y molesta
+
+* agregar una especie de "lock screen"
+  * cada tanto tiempo de inactividad, estaría bueno mostrar una pantalla de bloqueo de la app
+  * que pida un password para volver a usarla
+  * la password la setea el usuario, si está seteada se activa la lock screen, sino no

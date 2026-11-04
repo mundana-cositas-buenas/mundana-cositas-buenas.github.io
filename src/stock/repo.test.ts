@@ -4,8 +4,10 @@ import { newId, openDB, type DB } from '../lib/db';
 import {
   anularMovimiento,
   anularVenta,
+  borrarMovimiento,
   borrarProducto,
   borrarPromo,
+  borrarVenta,
   cambiosStock,
   cargarAlertas,
   contarMovimientos,
@@ -102,6 +104,19 @@ describe('movimientos', () => {
     expect((await stockActualDe(db)).get(vino.id)).toBe(10);
     await expect(anularMovimiento(db, venta.id)).rejects.toThrow('ya estaba anulado');
     await expect(anularMovimiento(db, 'nada')).rejects.toThrow('no existe');
+  });
+
+  it('deletes only a voided movement, leaving the stock as it was', async () => {
+    const db = await fresh();
+    const vino = await guardarProducto(db, producto('vino'));
+    const entrada = await registrarMovimiento(db, vino.id, { tipo: 'entrada', cantidad: 10 });
+    const ajuste = await registrarMovimiento(db, vino.id, { tipo: 'ajuste', cantidad: -3 });
+    await expect(borrarMovimiento(db, ajuste.id)).rejects.toThrow('Solo se puede borrar un movimiento anulado');
+    await anularMovimiento(db, ajuste.id);
+    await borrarMovimiento(db, ajuste.id);
+    expect((await movimientosDe(db, vino.id)).map((m) => m.id)).toEqual([entrada.id]);
+    expect((await stockActualDe(db)).get(vino.id)).toBe(10);
+    await expect(borrarMovimiento(db, ajuste.id)).rejects.toThrow('no existe');
   });
 
   it('reports alerts and notifies changes', async () => {
@@ -205,7 +220,33 @@ describe('ventas', () => {
     expect(await listarMovimientos(db)).toHaveLength(2);
   });
 
-  it('notifies the nav badge on register and void', async () => {
+  it('deletes only a voided sale, with all its lines, leaving stock and totals as they were', async () => {
+    const db = await fresh();
+    const jugo = await guardarProducto(db, conPrecio('jugo', 100));
+    const miel = await guardarProducto(db, conPrecio('miel', 200));
+    await registrarMovimiento(db, jugo.id, { tipo: 'entrada', cantidad: 5 });
+    const r = await registrarVenta(db, [{ productoId: jugo.id, cantidad: 1 }, { productoId: miel.id, cantidad: 2 }], { descuentoPct: 0 }, t(1));
+    const otra = await registrarVenta(db, [{ productoId: jugo.id, cantidad: 2 }], { descuentoPct: 0 }, t(2));
+    await expect(borrarVenta(db, r.venta.id)).rejects.toThrow('Solo se puede borrar una venta anulada');
+    await expect(borrarMovimiento(db, r.lineas[0].id)).rejects.toThrow('borrá la venta completa');
+
+    await anularVenta(db, r.venta.id);
+    const antes = await stockActualDe(db);
+    expect([antes.get(jugo.id), antes.get(miel.id)]).toEqual([3, 0]);
+    await borrarVenta(db, r.venta.id);
+    expect((await listarVentas(db)).map((v) => v.venta.id)).toEqual([otra.venta.id]);
+    expect((await listarMovimientos(db)).filter((m) => m.ventaId === r.venta.id)).toEqual([]);
+    const despues = await stockActualDe(db);
+    expect([despues.get(jugo.id), despues.get(miel.id) ?? 0]).toEqual([3, 0]); // no movements left: no entry, read as 0
+    await expect(borrarVenta(db, r.venta.id)).rejects.toThrow('no existe');
+
+    // The product was only in the deleted sale, so it can be deleted now.
+    expect(await ventasConProducto(db, miel.id)).toBe(0);
+    await borrarProducto(db, miel.id);
+    expect((await listarProductos(db)).map((p) => p.nombre)).toEqual(['jugo']);
+  });
+
+  it('notifies the nav badge on register, void and delete', async () => {
     const db = await fresh();
     const jugo = await guardarProducto(db, conPrecio('jugo', 100));
     const f = vi.fn();
@@ -213,10 +254,11 @@ describe('ventas', () => {
     try {
       const r = await registrarVenta(db, [{ productoId: jugo.id, cantidad: 1 }], { descuentoPct: 0 });
       await anularVenta(db, r.venta.id);
+      await borrarVenta(db, r.venta.id);
     } finally {
       cambiosStock.removeEventListener('cambio', f);
     }
-    expect(f).toHaveBeenCalledTimes(2);
+    expect(f).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -331,5 +373,15 @@ describe('promos', () => {
     await borrarPromo(db, otra.id);
     await borrarProducto(db, nuevo.id);
     expect((await listarPromos(db)).map((p) => p.nombre)).toEqual(['Combo']);
+  });
+
+  it('deleting the voided sale where a promo was sold lets the promo be deleted', async () => {
+    const { db, combo } = await preparar();
+    const r = await registrarVenta(db, [], { descuentoPct: 0 }, new Date(), [{ promoId: combo.id, cantidad: 1 }]);
+    await anularVenta(db, r.venta.id);
+    await borrarVenta(db, r.venta.id);
+    expect(await listarMovimientos(db)).toEqual([]);
+    await borrarPromo(db, combo.id);
+    expect(await listarPromos(db)).toEqual([]);
   });
 });

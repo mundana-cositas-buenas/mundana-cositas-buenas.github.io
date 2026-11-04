@@ -30,6 +30,10 @@
     ventas = ventas.map((x) => (x.venta.id === v.venta.id ? v : x));
     stock = await stockActualDe(db);
   }
+
+  function borrada(id: string) {
+    ventas = ventas.filter((x) => x.venta.id !== id);
+  }
 </script>
 
 <div class="titulo">
@@ -49,6 +53,6 @@
   {#if !ventas.length}
     <p class="muted">Todavía no hay ventas.</p>
   {:else}
-    <VentasDias {db} {ventas} {productos} onanulada={anulada} />
+    <VentasDias {db} {ventas} {productos} onanulada={anulada} onborrada={borrada} />
   {/if}
 {/if}

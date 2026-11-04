@@ -2,7 +2,7 @@
   import type { DB } from '../lib/db';
   import { formatNumero, formatPesos } from '../lib/money';
   import { diaLocal, formatFechaHora, formatHora } from '../lib/texto';
-  import { anularVenta } from './repo';
+  import { anularVenta, borrarVenta } from './repo';
   import type { Producto } from './types';
   import { nombreEnVenta } from './promos';
   import { lineasSueltas, totalesDe, ventasPorDia, type VentaConLineas } from './ventas';
@@ -12,11 +12,13 @@
     ventas,
     productos,
     onanulada,
+    onborrada,
   }: {
     db: DB;
     ventas: VentaConLineas[];
     productos: Producto[];
     onanulada: (v: VentaConLineas) => void;
+    onborrada: (id: string) => void;
   } = $props();
 
   const hoy = diaLocal(new Date().toISOString());
@@ -48,6 +50,18 @@
     if (!confirm(`${texto}\nQueda en el historial, pero deja de contar para el stock y los totales.`)) return;
     try {
       onanulada(await anularVenta(db, v.venta.id));
+      error = '';
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function borrar(v: VentaConLineas) {
+    const texto = `¿Borrar la venta anulada del ${formatFechaHora(v.venta.fecha)} (${formatPesos(totalesDe(v).total)})?`;
+    if (!confirm(`${texto}\nSe elimina del historial; no cambia el stock ni los totales.`)) return;
+    try {
+      await borrarVenta(db, v.venta.id);
+      onborrada(v.venta.id);
       error = '';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -109,6 +123,7 @@
                     <td class="acciones">
                       {#if v.venta.anuladoEn}
                         <span class="muted" title="Anulada el {formatFechaHora(v.venta.anuladoEn)}">anulada</span>
+                        <button type="button" class="secundario peligro" onclick={() => borrar(v)}>Borrar</button>
                       {:else}
                         <button type="button" class="secundario peligro" onclick={() => anular(v)}>Anular</button>
                       {/if}

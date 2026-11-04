@@ -3,7 +3,7 @@
   import { formatNumero } from '../lib/money';
   import { formatFechaHora } from '../lib/texto';
   import { efecto } from './logic';
-  import { anularMovimiento } from './repo';
+  import { anularMovimiento, borrarMovimiento } from './repo';
   import type { Movimiento, Producto } from './types';
   import { TIPOS } from './validar';
 
@@ -11,11 +11,13 @@
     db,
     filas,
     onanulado,
+    onborrado,
   }: {
     db: DB;
     // `producto` shows the product column; `saldo` the stock after each movement.
     filas: { mov: Movimiento; producto?: Producto; saldo?: number }[];
     onanulado: (m: Movimiento) => void;
+    onborrado: (id: string) => void;
   } = $props();
 
   const conProducto = $derived(filas.some((f) => f.producto));
@@ -34,6 +36,19 @@
     if (!confirm(`${texto}\nQueda en el historial, pero deja de contar para el stock.`)) return;
     try {
       onanulado(await anularMovimiento(db, m.id));
+      error = '';
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function borrar(m: Movimiento, p?: Producto) {
+    const de = p ? ` de "${p.nombre}"` : '';
+    const texto = `¿Borrar el movimiento anulado: ${titulo(m).toLowerCase()}${de} (${signo(m)}) del ${formatFechaHora(m.fecha)}?`;
+    if (!confirm(`${texto}\nSe elimina del historial; no cambia el stock.`)) return;
+    try {
+      await borrarMovimiento(db, m.id);
+      onborrado(m.id);
       error = '';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -73,6 +88,9 @@
         <td class="acciones">
           {#if m.anuladoEn}
             <span class="muted" title="Anulado el {formatFechaHora(m.anuladoEn)}">anulado</span>
+            {#if !m.ventaId}
+              <button type="button" class="secundario peligro" onclick={() => borrar(m, p)}>Borrar</button>
+            {/if}
           {:else if m.ventaId}
             <a href="#/ventas" title="Es parte de una venta: se anula desde Ventas">{m.promoId ? 'en promo' : 'en venta'}</a>
           {:else}

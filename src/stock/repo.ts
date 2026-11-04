@@ -127,6 +127,19 @@ export async function anularMovimiento(db: DB, id: string): Promise<Movimiento> 
   return r;
 }
 
+/** Deletes a voided movement for good. It no longer counted, so the stock doesn't change. */
+export async function borrarMovimiento(db: DB, id: string): Promise<void> {
+  await db.tx('movimientos', 'readwrite', async (tx) => {
+    const store = tx.objectStore('movimientos');
+    const m = await req<Movimiento | undefined>(store.get(id));
+    if (!m) throw new Error('El movimiento no existe');
+    if (m.ventaId) throw new Error('El movimiento es parte de una venta: borrá la venta completa');
+    if (!m.anuladoEn) throw new Error('Solo se puede borrar un movimiento anulado');
+    await req(store.delete(id));
+  });
+  avisar();
+}
+
 /** Every sale with its lines, newest first. */
 export function listarVentas(db: DB): Promise<VentaConLineas[]> {
   return db.tx(['ventas', 'movimientos'], 'readonly', async (tx) => {
@@ -227,6 +240,23 @@ export async function anularVenta(db: DB, id: string): Promise<VentaConLineas> {
   });
   avisar();
   return r;
+}
+
+/**
+ * Deletes a voided sale and all its lines together, for good. They no longer counted, so neither
+ * the stock nor the sales totals change.
+ */
+export async function borrarVenta(db: DB, id: string): Promise<void> {
+  await db.tx(['ventas', 'movimientos'], 'readwrite', async (tx) => {
+    const ventas = tx.objectStore('ventas');
+    const v = await req<Venta | undefined>(ventas.get(id));
+    if (!v) throw new Error('La venta no existe');
+    if (!v.anuladoEn) throw new Error('Solo se puede borrar una venta anulada');
+    const movs = tx.objectStore('movimientos');
+    for (const k of await req<IDBValidKey[]>(movs.index('ventaId').getAllKeys(id))) await req(movs.delete(k));
+    await req(ventas.delete(id));
+  });
+  avisar();
 }
 
 // --- Promos ---

@@ -43,6 +43,11 @@
     movimientos = movimientos.map((x) => (x.id === m.id ? m : x));
     if (antes) mover(m.productoId, -efecto(antes));
   }
+
+  // Only voided movements can be deleted: they no longer count, so the stock stays as it is.
+  function borrado(id: string) {
+    movimientos = movimientos.filter((x) => x.id !== id);
+  }
 </script>
 
 {#if cargando}
@@ -61,4 +66,4 @@
     {filas.length < filtrados.length ? `los últimos ${filas.length} de ${filtrados.length}` : `${filtrados.length}`}
   </span>
 </div>
-<MovimientosTabla {db} {filas} onanulado={anulado} />
+<MovimientosTabla {db} {filas} onanulado={anulado} onborrado={borrado} />

@@ -77,6 +77,11 @@
   {#if !filas.length}
     <p class="muted">Sin movimientos todavía.</p>
   {:else}
-    <MovimientosTabla {db} {filas} onanulado={(m) => (movimientos = movimientos.map((x) => (x.id === m.id ? m : x)))} />
+    <MovimientosTabla
+      {db}
+      {filas}
+      onanulado={(m) => (movimientos = movimientos.map((x) => (x.id === m.id ? m : x)))}
+      onborrado={(id) => (movimientos = movimientos.filter((x) => x.id !== id))}
+    />
   {/if}
 {/if}
