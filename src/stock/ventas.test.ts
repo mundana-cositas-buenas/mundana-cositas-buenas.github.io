@@ -8,6 +8,7 @@ import {
   pedidoPorProducto,
   quitarPromo,
   agruparVentas,
+  gruposParaElegir,
   importe,
   leerLinea,
   quedanNegativos,
@@ -275,5 +276,63 @@ describe('ventasPorCategoria', () => {
 
   it('is empty without sales that count', () => {
     expect(ventasPorCategoria([con(venta('v', d, 0, d.toISOString()), [linea('v', 'agua', 1, 100)])], productos, categorias)).toEqual([]);
+  });
+});
+
+describe('gruposParaElegir', () => {
+  const cat = (id: string, nombre: string): Categoria => ({ id, actualizadoEn: '', nombre });
+  const bebidas = cat('b', 'Bebidas');
+  const almacen = cat('a', 'almacén');
+  const vacia = cat('v', 'Vacía');
+  const en = (p: Producto, categoriaId?: string, cambios: Partial<Producto> = {}): Producto => ({
+    ...p,
+    ...(categoriaId ? { categoriaId } : {}),
+    ...cambios,
+  });
+  const promo = (nombre: string, componentes: Promo['componentes'], activo = true): Promo => ({
+    id: nombre,
+    actualizadoEn: '',
+    nombre,
+    precio: 1000,
+    componentes,
+    activo,
+  });
+  const nombres = (g: ReturnType<typeof gruposParaElegir>[number]) =>
+    g.items.map((i) => (i.tipo === 'producto' ? i.producto.nombre : i.promo.nombre));
+
+  it('groups active products by category, by name, then without category, then promos', () => {
+    const productos = [
+      en(producto('soda', 100), 'b'),
+      en(jugo, 'b'),
+      en(producto('agua', 100), 'b', { activo: false }),
+      en(producto('arroz', 100), 'a'),
+      en(producto('suelto', 100)),
+      en(producto('huérfano', 100), 'borrada'),
+      en(producto('solo inactivo', 100), 'v', { activo: false }),
+    ];
+    const promos = [promo('Combo', [{ productoId: 'jugo', cantidad: 1 }]), promo('Vieja', [], false)];
+    const grupos = gruposParaElegir(productos, [vacia, bebidas, almacen], promos);
+    expect(grupos.map((g) => [g.clave, g.nombre])).toEqual([
+      ['a', 'almacén'],
+      ['b', 'Bebidas'],
+      ['sin', 'Sin categoría'],
+      ['promos', 'Promos'],
+    ]);
+    expect(grupos.map(nombres)).toEqual([['arroz'], ['jugo', 'soda'], ['huérfano', 'suelto'], ['Combo']]);
+  });
+
+  it('leaves out "Sin categoría" and "Promos" when they would be empty', () => {
+    expect(gruposParaElegir([en(jugo, 'b')], [bebidas], []).map((g) => g.clave)).toEqual(['b']);
+  });
+
+  it('flags products without a price and promos that cannot be sold', () => {
+    const apagado = en(producto('apagado', 100), 'b', { activo: false });
+    const productos = [en(producto('gratis', 0), 'b'), en(producto('nuevo'), 'b'), apagado];
+    const promos = [promo('Mala', [{ productoId: 'apagado', cantidad: 1 }]), promo('Buena', [{ productoId: 'gratis', cantidad: 2 }])];
+    const [b, p] = gruposParaElegir(productos, [bebidas], promos);
+    expect(b.items.map((i) => i.problema)).toEqual([undefined, 'Sin precio']);
+    expect(nombres(p)).toEqual(['Buena', 'Mala']);
+    expect(p.items[0].problema).toBeUndefined();
+    expect(p.items[1].problema).toMatch(/desactivado/);
   });
 });

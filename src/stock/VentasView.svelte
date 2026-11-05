@@ -53,7 +53,7 @@
   {#if !productos.some((p) => p.activo)}
     <p class="muted">Todavía no hay productos activos. <a href="#/stock">Cargá los productos</a> para registrar ventas.</p>
   {:else}
-    <VentaEnCurso {db} {productos} {promos} {stock} {ediciones} onregistrada={registrada} />
+    <VentaEnCurso {db} {productos} {promos} {categorias} {stock} {ediciones} onregistrada={registrada} />
   {/if}
 
   <h2>Ventas por día</h2>

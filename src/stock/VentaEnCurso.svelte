@@ -14,7 +14,8 @@
   import type { Ediciones } from '../pwa/ediciones';
   import { detalleComponentes, nombreEnVenta, problemaPromo } from './promos';
   import { registrarVenta } from './repo';
-  import type { Producto, Promo } from './types';
+  import ElegirProductos from './ElegirProductos.svelte';
+  import type { Categoria, Producto, Promo } from './types';
   import { ETIQUETAS_VENTA, validarVenta } from './validar';
   import {
     agregarLinea,
@@ -33,6 +34,7 @@
     db,
     productos,
     promos,
+    categorias,
     stock,
     ediciones,
     onregistrada,
@@ -40,6 +42,7 @@
     db: DB;
     productos: Producto[];
     promos: Promo[];
+    categorias: Categoria[];
     stock: ReadonlyMap<string, number>;
     ediciones: Ediciones;
     onregistrada: (v: VentaConLineas) => void;
@@ -107,6 +110,25 @@
     cantidad = '';
     error = '';
     productoInput?.focus();
+  }
+
+  // From the dialog: one more unit each click (the dialog keeps the focus).
+  function elegirProducto(p: Producto) {
+    const r = leerLinea(p, p.nombre, '');
+    if (!r.ok) error = r.error;
+    else {
+      borrador.lineas = agregarLinea(borrador.lineas, r.linea);
+      error = '';
+    }
+  }
+
+  function elegirPromo(p: Promo) {
+    const r = leerPromo(p, '', porId);
+    if (!r.ok) error = r.error;
+    else {
+      borrador.promos = agregarPromo(borrador.promos, r.linea);
+      error = '';
+    }
   }
 
   function quitar(id: string) {
@@ -204,6 +226,17 @@
       {/if}
     </span>
   </form>
+
+  <ElegirProductos
+    {productos}
+    {categorias}
+    {promos}
+    lineas={borrador.lineas}
+    promosEnVenta={borrador.promos}
+    total={t.total}
+    onproducto={elegirProducto}
+    onpromo={elegirPromo}
+  />
 
   {#if !vacia}
     <table class="tabla venta">

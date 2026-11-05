@@ -2,7 +2,7 @@
 // they were sold at, so later price changes don't rewrite past sales. Promos sold are kept on
 // the sale with their price; their components are movements with a promoId and price 0.
 
-import { leerNumero } from '../lib/campos';
+import { leerNumero, porNombre } from '../lib/campos';
 import type { Centavos } from '../lib/money';
 import { diaLocal } from '../lib/texto';
 import { problemaPromo } from './promos';
@@ -99,6 +99,55 @@ export function leerPromo(promo: Promo, cantidad: string, productos: ReadonlyMap
   const c = leerNumero(cantidad.trim() || '1', { mayorQue: 0 });
   if (!c.ok) return { ok: false, campo: 'cantidad', error: c.error };
   return { ok: true, linea: { promo, cantidad: c.valor } };
+}
+
+/** A button in the sale's pick-by-click dialog: a product or a promo, with why it can't be added. */
+export type ItemParaElegir =
+  | { tipo: 'producto'; producto: Producto; problema?: string }
+  | { tipo: 'promo'; promo: Promo; problema?: string };
+
+/** A button of the row above the sale: a category, "Sin categoría" or "Promos", with what it offers. */
+export interface GrupoParaElegir {
+  clave: string; // the category id, 'sin' or 'promos'
+  nombre: string;
+  items: ItemParaElegir[];
+}
+
+/**
+ * The groups to pick sale items by click: one per category with active products (by name), then
+ * the active products without a (still existing) category, then the active promos; items by name.
+ * Products without a price and promos with a problem are listed with it, to show them disabled.
+ */
+export function gruposParaElegir(
+  productos: readonly Producto[],
+  categorias: readonly Categoria[],
+  promos: readonly Promo[],
+): GrupoParaElegir[] {
+  const porId = new Map(productos.map((p) => [p.id, p]));
+  const existe = new Set(categorias.map((c) => c.id));
+  const item = (producto: Producto): ItemParaElegir =>
+    producto.precioVenta === undefined ? { tipo: 'producto', producto, problema: 'Sin precio' } : { tipo: 'producto', producto };
+  const activos = productos.filter((p) => p.activo).sort(porNombre);
+  const grupos: GrupoParaElegir[] = [...categorias]
+    .sort(porNombre)
+    .map((c) => ({ clave: c.id, nombre: c.nombre, items: activos.filter((p) => p.categoriaId === c.id).map(item) }));
+  grupos.push({
+    clave: 'sin',
+    nombre: 'Sin categoría',
+    items: activos.filter((p) => !p.categoriaId || !existe.has(p.categoriaId)).map(item),
+  });
+  grupos.push({
+    clave: 'promos',
+    nombre: 'Promos',
+    items: promos
+      .filter((p) => p.activo)
+      .sort(porNombre)
+      .map((promo) => {
+        const problema = problemaPromo(promo, porId);
+        return problema ? { tipo: 'promo', promo, problema } : { tipo: 'promo', promo };
+      }),
+  });
+  return grupos.filter((g) => g.items.length);
 }
 
 /** Adds a promo line; a promo already in the sale gets the quantity added to its line. */

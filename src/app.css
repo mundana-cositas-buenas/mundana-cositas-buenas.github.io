@@ -421,6 +421,82 @@ form.rapido {
   margin-bottom: 0.75rem;
 }
 
+/* Sales: pick by category (buttons above the sale, and a dialog with a button per product). */
+div.elegir {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+div.elegir button {
+  padding: 0.5rem 1rem;
+}
+
+dialog.elegir {
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+dialog.elegir::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+dialog.elegir .contenido {
+  padding: 1rem;
+}
+
+dialog.elegir h2 {
+  margin: 0 0 0.75rem;
+}
+
+dialog.elegir .items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
+dialog.elegir button.item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 4rem;
+  padding: 0.5rem;
+  background: #fff;
+  text-align: center;
+}
+
+dialog.elegir button.item.elegido {
+  border-color: var(--accent);
+}
+
+dialog.elegir .cantidad {
+  color: var(--accent);
+}
+
+dialog.elegir .problema {
+  font-size: 0.85em;
+}
+
+dialog.elegir .pie {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+dialog.elegir .pie button {
+  padding: 0.5rem 1.25rem;
+}
+
 dl.resumen {
   display: grid;
   grid-template-columns: max-content max-content;
