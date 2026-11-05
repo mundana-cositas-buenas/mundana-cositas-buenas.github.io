@@ -1,10 +1,10 @@
 // The first one is the home page (empty or unknown hash).
 export const SECCIONES = [
   { id: 'ventas', titulo: 'Ventas' },
-  { id: 'costos', titulo: 'Recetas' },
   { id: 'stock', titulo: 'Stock' },
   { id: 'proveedores', titulo: 'Proveedores' },
   { id: 'empleados', titulo: 'Empleados' },
+  { id: 'costos', titulo: 'Recetas' },
   { id: 'backup', titulo: 'Backup' },
 ] as const;
 
