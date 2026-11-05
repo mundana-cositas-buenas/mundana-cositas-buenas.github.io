@@ -126,7 +126,7 @@
     }
     agregarTexto = agregarError = '';
     const base = { id: newId(), actualizadoEn: '', recetaId: receta.id, orden: siguienteOrden() };
-    agregar({ ...base, tipo: 'insumo', insumoId: ins.id, cantidad: 0, unidad: ins.unidadBase, mermaPct: 0 }, 'cantidad');
+    agregar({ ...base, tipo: 'insumo', insumoId: ins.id, cantidad: 0, unidad: ins.unidadBase }, 'cantidad');
   }
 
   function agregarCostoFijo() {
@@ -241,7 +241,6 @@
         <th>Ingrediente / concepto</th>
         <th class="num">Cantidad</th>
         <th>Unidad</th>
-        <th class="num">Merma %</th>
         <th class="num">Costo</th>
         <th></th>
       </tr>
@@ -281,20 +280,8 @@
                 {/each}
               </select>
             </td>
-            <td class="num">
-              <input
-                class="num corto"
-                inputmode="decimal"
-                bind:value={f.merma}
-                onchange={() => guardarFila(f)}
-                placeholder="0"
-                aria-label="Merma %"
-                aria-invalid={!!errorCampo(i, 'merma')}
-                title={errorCampo(i, 'merma')}
-              />
-            </td>
           {:else}
-            <td colspan="3">
+            <td colspan="2">
               <input
                 class="ancho"
                 data-campo="descripcion"
@@ -332,12 +319,12 @@
         </tr>
       {/each}
       {#if !filas.length}
-        <tr><td colspan="6" class="muted">Sin líneas. Agregá insumos o costos fijos.</td></tr>
+        <tr><td colspan="5" class="muted">Sin líneas. Agregá insumos o costos fijos.</td></tr>
       {/if}
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="6" class="agregar">
+        <td colspan="5" class="agregar">
           <form onsubmit={agregarInsumo} aria-label="Agregar insumo">
             <input
               bind:this={agregarInput}
@@ -364,7 +351,7 @@
         </td>
       </tr>
       {#if agregarError}
-        <tr class="errores"><td colspan="6">{agregarError}</td></tr>
+        <tr class="errores"><td colspan="5">{agregarError}</td></tr>
       {/if}
     </tfoot>
   </table>

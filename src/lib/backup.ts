@@ -15,7 +15,8 @@ export const FORMATO = 'mundana-backup';
 // 5: adds proveedores and operacionesProveedor, proveedorId on products, and proveedorId/importe on
 //    entries (older files are read with no suppliers).
 // 6: adds categorias and categoriaId on products (older files are read with no categories).
-export const VERSION = 6;
+// 7: recipe lines drop mermaPct (older files are read without it, so their waste is ignored).
+export const VERSION = 7;
 
 /** Data stores, in dependency order. `meta` (e.g. the last backup date) is not exported. */
 export const STORES = [
@@ -175,7 +176,6 @@ const diasEnteros: Chequeo = (v) => Number.isInteger(v) && (v as number) >= 0;
 const booleano: Chequeo = (v) => typeof v === 'boolean';
 const fecha: Chequeo = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v));
 const porcentaje: Chequeo = (v) => noNegativo(v) && (v as number) <= 100;
-const merma: Chequeo = (v) => noNegativo(v) && (v as number) < 100;
 const opcional =
   (c: Chequeo): Chequeo =>
   (v) =>
@@ -222,7 +222,7 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
     case 'recetas':
       return { ...REGISTRO, nombre: texto, rendimiento: noNegativo, unidadRendimiento: texto, margen: numero, notas: texto };
     case 'recetaLineas':
-      if (r.tipo === 'insumo') return { ...LINEA, insumoId: noVacio, cantidad: noNegativo, unidad: esUnidad, mermaPct: merma };
+      if (r.tipo === 'insumo') return { ...LINEA, insumoId: noVacio, cantidad: noNegativo, unidad: esUnidad };
       if (r.tipo === 'costoFijo') return { ...LINEA, descripcion: texto, monto: centavos };
       return 'tipo de línea desconocido';
     case 'productos':
@@ -331,6 +331,8 @@ export function leerBackup(contenido: string): Lectura {
   if ((v as number) < 5 && datos.proveedores === undefined) datos.proveedores = [];
   if ((v as number) < 5 && datos.operacionesProveedor === undefined) datos.operacionesProveedor = [];
   if ((v as number) < 6 && datos.categorias === undefined) datos.categorias = [];
+  // Recipe lines no longer have a waste percentage: drop it so it doesn't get back into the database.
+  if (Array.isArray(datos.recetaLineas)) for (const l of datos.recetaLineas) if (esObjeto(l)) delete l.mermaPct;
 
   const ids = {} as Record<StoreDatos, Set<string>>;
   for (const s of STORES) {

@@ -50,6 +50,22 @@ describe('openDB', () => {
     expect([...productos.indexNames]).toEqual(['categoriaId']);
   });
 
+  it('v8 drops mermaPct from recipe lines and keeps the rest', async () => {
+    const name = `v8-${n++}`;
+    const viejo = await openDB(name, MIGRATIONS.slice(0, 7));
+    const base = { actualizadoEn: '', recetaId: 'r1', tipo: 'insumo', insumoId: 'i1', cantidad: 100, unidad: 'g' };
+    await viejo.put('recetaLineas', { id: 'l1', orden: 0, ...base, mermaPct: 20 });
+    await viejo.put('recetaLineas', { id: 'l2', orden: 1, actualizadoEn: '', recetaId: 'r1', tipo: 'costoFijo', descripcion: 'Gas', monto: 500 });
+    viejo.close();
+    const db = await openDB(name);
+    expect(db.version).toBe(DB_VERSION);
+    const lineas = await db.list('recetaLineas');
+    expect(lineas.find((l) => l.id === 'l1')).toEqual({ id: 'l1', orden: 0, ...base, actualizadoEn: expect.any(String) });
+    expect(lineas.find((l) => l.id === 'l2')).toMatchObject({ descripcion: 'Gas', monto: 500 });
+    expect(await db.listBy('recetaLineas', 'insumoId', 'i1')).toHaveLength(1);
+    db.close();
+  });
+
   it('v7 adds categories and keeps the existing products', async () => {
     const name = `v7-${n++}`;
     const viejo = await openDB(name, MIGRATIONS.slice(0, 6));

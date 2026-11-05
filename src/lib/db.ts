@@ -71,6 +71,19 @@ export const MIGRATIONS: readonly Migration[] = [
     db.createObjectStore('categorias', { keyPath: 'id' });
     tx.objectStore('productos').createIndex('categoriaId', 'categoriaId');
   },
+  // Recipe lines drop the waste percentage (mermaPct); their cost is now quantity × unit cost.
+  (_db, tx) => {
+    const lineas = tx.objectStore('recetaLineas');
+    lineas.openCursor().onsuccess = (ev) => {
+      const c = (ev.target as IDBRequest<IDBCursorWithValue | null>).result;
+      if (!c) return;
+      if ('mermaPct' in c.value) {
+        const { mermaPct: _, ...linea } = c.value;
+        c.update(linea);
+      }
+      c.continue();
+    };
+  },
 ];
 
 export const DB_VERSION = MIGRATIONS.length;

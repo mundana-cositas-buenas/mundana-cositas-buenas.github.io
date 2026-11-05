@@ -5,8 +5,8 @@ import type { Insumo, Receta, RecetaLinea } from './types';
 const harina: Insumo = { id: 'i1', actualizadoEn: '', nombre: 'Harina', unidadBase: 'g', precioCompra: 100000, cantidadCompra: 1, unidadCompra: 'kg' };
 const pan: Receta = { id: 'r1', actualizadoEn: '', nombre: 'Pan', rendimiento: 2, unidadRendimiento: 'panes', margen: 50, notas: '' };
 const lineas: RecetaLinea[] = [
-  { id: 'l1', actualizadoEn: '', recetaId: 'r1', orden: 0, tipo: 'insumo', insumoId: 'i1', cantidad: 100, unidad: 'g', mermaPct: 0 },
-  { id: 'l2', actualizadoEn: '', recetaId: 'r1', orden: 1, tipo: 'insumo', insumoId: 'x', cantidad: 1, unidad: 'g', mermaPct: 0 },
+  { id: 'l1', actualizadoEn: '', recetaId: 'r1', orden: 0, tipo: 'insumo', insumoId: 'i1', cantidad: 100, unidad: 'g' },
+  { id: 'l2', actualizadoEn: '', recetaId: 'r1', orden: 1, tipo: 'insumo', insumoId: 'x', cantidad: 1, unidad: 'g' },
 ];
 
 const filas = (csv: string) => csv.slice(1).trimEnd().split('\r\n');

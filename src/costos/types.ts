@@ -36,7 +36,6 @@ export interface LineaInsumo extends LineaBase {
   insumoId: string;
   cantidad: number; // in unidad
   unidad: Unidad;
-  mermaPct: number;
 }
 
 export interface LineaCostoFijo extends LineaBase {

@@ -72,12 +72,11 @@ describe('recipe lines', () => {
     insumoId: 'i',
     cantidad: 0.25,
     unidad: 'kg',
-    mermaPct: 0,
-  };
+    };
   const lf: LineaCostoFijo = { id: 'f', actualizadoEn: '', recetaId: 'r', orden: 1, tipo: 'costoFijo', descripcion: 'gas', monto: 12345 };
 
   it('round-trips lines', () => {
-    expect(filaDesde(li)).toMatchObject({ cantidad: '0,25', merma: '' });
+    expect(filaDesde(li)).toMatchObject({ cantidad: '0,25' });
     expect(leerFila(filaDesde(li))).toEqual({ linea: li, errores: {} });
     expect(filaDesde(lf)).toMatchObject({ monto: '123,45' });
     expect(leerFila(filaDesde(lf))).toEqual({ linea: lf, errores: {} });
@@ -86,10 +85,10 @@ describe('recipe lines', () => {
   it('marks invalid fields as NaN with an error', () => {
     const f = filaDesde(li);
     if (f.tipo !== 'insumo') throw new Error();
-    const r = leerFila({ ...f, cantidad: 'x', merma: '100' });
-    expect(Object.keys(r.errores).sort()).toEqual(['cantidad', 'merma']);
+    const r = leerFila({ ...f, cantidad: 'x' });
+    expect(Object.keys(r.errores)).toEqual(['cantidad']);
     expect(r.linea.tipo === 'insumo' && r.linea.cantidad).toBeNaN();
-    expect(mensajeFila(r.errores)).toMatch(/^Cantidad: No es un número.* · Merma: Debe ser menor que 100$/);
+    expect(mensajeFila(r.errores)).toMatch(/^Cantidad: No es un número/);
     expect(mensajeFila({})).toBe('');
   });
 });

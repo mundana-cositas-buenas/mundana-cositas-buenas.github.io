@@ -58,7 +58,6 @@ const lineaInsumo: LineaInsumo = {
   insumoId: 'i1',
   cantidad: 100,
   unidad: 'g',
-  mermaPct: 0,
 };
 const lineaFija: LineaCostoFijo = { id: 'l2', actualizadoEn: T, recetaId: 'r1', orden: 1, tipo: 'costoFijo', descripcion: 'Gas', monto: 5000 };
 const producto: Producto = { id: 'p1', actualizadoEn: T, nombre: 'Miel', unidad: 'frasco', stockMinimo: 2, costo: 120000, activo: true, proveedorId: 'pv1', categoriaId: 'c1' };
@@ -369,6 +368,17 @@ describe('leerBackup', () => {
     expect(r.ok && r.backup.datos.categorias).toEqual([]);
     // From version 6 on the list is required.
     expect(errores(json((b) => delete b.datos.categorias))).toContain('Categorías: falta la lista.');
+  });
+
+  it('upgrades version 6 files, whose recipe lines had a waste percentage', () => {
+    const r = leerBackup(
+      json((b) => {
+        b.version = 6;
+        b.datos.recetaLineas[0].mermaPct = 20;
+      }),
+    );
+    expect(r.ok && r.backup.version).toBe(VERSION);
+    expect(r.ok && r.backup.datos.recetaLineas[0]).toEqual(lineaInsumo);
   });
 
   it('checks categories and the products that refer to them', () => {

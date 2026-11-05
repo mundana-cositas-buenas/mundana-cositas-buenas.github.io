@@ -8,7 +8,6 @@ describe('leerNumero / leerPesos', () => {
     expect(leerNumero('x')).toEqual({ ok: false, error: NUMERO_INVALIDO });
     expect(leerNumero('-1', { min: 0 })).toEqual({ ok: false, error: 'No puede ser negativo' });
     expect(leerNumero('0', { mayorQue: 0 }).ok).toBe(false);
-    expect(leerNumero('100', { min: 0, menorQue: 100 }).ok).toBe(false);
     expect(leerPesos('1.000')).toEqual({ ok: true, valor: 100000 });
     expect(leerPesos('-1')).toEqual({ ok: false, error: 'No puede ser negativo' });
   });
@@ -17,7 +16,6 @@ describe('leerNumero / leerPesos', () => {
     expect(leerNumero('-2', { mayorQue: 0 })).toEqual({ ok: false, error: 'No puede ser negativo' });
     expect(leerNumero('0', { mayorQue: 0 })).toEqual({ ok: false, error: 'Debe ser mayor que 0' });
     expect(leerNumero('-5', {})).toEqual({ ok: true, valor: -5 });
-    expect(leerNumero('99,95', { menorQue: 99.9 })).toEqual({ ok: false, error: 'Debe ser menor que 99,9' });
   });
 });
 
@@ -25,6 +23,7 @@ describe('leerNumero max', () => {
   it('is inclusive', () => {
     expect(leerNumero('100', { max: 100 })).toEqual({ ok: true, valor: 100 });
     expect(leerNumero('100,01', { max: 100 })).toEqual({ ok: false, error: 'Máximo 100' });
+    expect(leerNumero('99,95', { max: 99.9 })).toEqual({ ok: false, error: 'Máximo 99,9' });
   });
 });
 

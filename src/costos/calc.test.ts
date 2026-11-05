@@ -23,7 +23,6 @@ const linea = (insumoId: string, cantidad: number, o: Partial<LineaInsumo> = {})
   insumoId,
   cantidad,
   unidad: 'g',
-  mermaPct: 0,
   ...o,
 });
 
@@ -67,17 +66,11 @@ describe('costoLineaInsumo', () => {
     expect(costoLineaInsumo(linea('huevo', 3, { unidad: 'u' }), insumos)).toEqual({ ok: true, valor: 36000 });
   });
 
-  it('applies waste', () => {
-    const r = costoLineaInsumo(linea('harina', 100, { mermaPct: 20 }), insumos);
-    expect(r.ok && r.valor).toBeCloseTo(12500);
-  });
-
   it('errors on mixed families, missing ingredient or bad numbers', () => {
     const mix = costoLineaInsumo(linea('harina', 1, { unidad: 'l' }), insumos);
     expect(mix).toMatchObject({ ok: false, error: expect.stringMatching(/incompatible/) });
     expect(costoLineaInsumo(linea('nada', 1), insumos)).toMatchObject({ ok: false });
     expect(costoLineaInsumo(linea('harina', -1), insumos)).toMatchObject({ ok: false });
-    expect(costoLineaInsumo(linea('harina', 1, { mermaPct: 100 }), insumos)).toMatchObject({ ok: false });
   });
 });
 

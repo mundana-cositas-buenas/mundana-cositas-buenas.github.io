@@ -92,12 +92,12 @@ export function validarCabecera(f: CabeceraForm): Validado<DatosCabecera, Cabece
 
 /** A recipe line being edited: numeric fields as typed text. */
 export type Fila =
-  | { tipo: 'insumo'; linea: LineaInsumo; cantidad: string; merma: string }
+  | { tipo: 'insumo'; linea: LineaInsumo; cantidad: string }
   | { tipo: 'costoFijo'; linea: LineaCostoFijo; monto: string };
 
 export function filaDesde(l: RecetaLinea): Fila {
   if (l.tipo === 'insumo')
-    return { tipo: 'insumo', linea: l, cantidad: numeroEditable(l.cantidad), merma: l.mermaPct ? numeroEditable(l.mermaPct) : '' };
+    return { tipo: 'insumo', linea: l, cantidad: numeroEditable(l.cantidad) };
   return { tipo: 'costoFijo', linea: l, monto: pesosEditable(l.monto) };
 }
 
@@ -114,14 +114,13 @@ export function leerFila(f: Fila): { linea: RecetaLinea; errores: Record<string,
   };
   if (f.tipo === 'insumo') {
     const cantidad = valor('cantidad', leerNumero(f.cantidad, { min: 0 }));
-    const mermaPct = valor('merma', leerNumero(f.merma || '0', { min: 0, menorQue: 100 }));
-    return { linea: { ...f.linea, cantidad, mermaPct }, errores };
+    return { linea: { ...f.linea, cantidad }, errores };
   }
   const monto = valor('monto', leerPesos(f.monto));
   return { linea: { ...f.linea, descripcion: f.linea.descripcion.trim(), monto }, errores };
 }
 
-const ETIQUETAS_LINEA: Record<string, string> = { cantidad: 'Cantidad', merma: 'Merma', monto: 'Monto' };
+const ETIQUETAS_LINEA: Record<string, string> = { cantidad: 'Cantidad', monto: 'Monto' };
 
 /** The typing errors of a line as one message ("Cantidad: No puede ser negativo"), or '' if none. */
 export function mensajeFila(errores: Record<string, string>): string {

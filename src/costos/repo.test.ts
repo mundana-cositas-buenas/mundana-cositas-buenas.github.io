@@ -53,7 +53,6 @@ const linea = (recetaId: string, insumoId: string, orden: number): LineaInsumo =
   insumoId,
   cantidad: 100,
   unidad: 'g',
-  mermaPct: 0,
 });
 
 const fijo = (recetaId: string, orden: number): LineaCostoFijo => ({

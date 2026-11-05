@@ -25,15 +25,14 @@ export function costoPorUnidadBase(i: Pick<Insumo, 'precioCompra' | 'cantidadCom
   return ok(i.precioCompra / cantidad);
 }
 
-/** cantidad (base unit) * costoPorUnidadBase / (1 - merma). */
+/** cantidad (base unit) * costoPorUnidadBase. */
 export function costoLineaInsumo(
-  l: Pick<LineaInsumo, 'insumoId' | 'cantidad' | 'unidad' | 'mermaPct'>,
+  l: Pick<LineaInsumo, 'insumoId' | 'cantidad' | 'unidad'>,
   insumos: ReadonlyMap<string, Insumo>,
 ): Resultado {
   const insumo = insumos.get(l.insumoId);
   if (!insumo) return err('Insumo inexistente');
   if (!(l.cantidad >= 0)) return err('Cantidad inválida');
-  if (!(l.mermaPct >= 0 && l.mermaPct < 100)) return err('La merma debe estar entre 0 y 99,9 %');
   const cpub = costoPorUnidadBase(insumo);
   if (!cpub.ok) return err(`Insumo "${insumo.nombre}": ${cpub.error}`);
   let cantidad: number;
@@ -42,7 +41,7 @@ export function costoLineaInsumo(
   } catch (e) {
     return err(mensaje(e));
   }
-  return ok((cantidad * cpub.valor) / (1 - l.mermaPct / 100));
+  return ok(cantidad * cpub.valor);
 }
 
 export function costoLinea(l: RecetaLinea, insumos: ReadonlyMap<string, Insumo>): Resultado {

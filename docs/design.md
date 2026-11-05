@@ -34,7 +34,7 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **insumos** (ingredients): `nombre`, `unidadBase` (`g` | `ml` | `u`), `precioCompra`, `cantidadCompra` (in `unidadCompra`), `unidadCompra`. `costoPorUnidadBase` is derived, never stored.
 - **recetas** (recipes): `nombre`, `rendimiento` (how many units it yields), `unidadRendimiento` (free text, e.g. "panes"), `margen` (%), `notas`.
 - **recetaLineas** (recipe lines): `recetaId`, `orden`, `tipo` (`insumo` | `costoFijo`).
-  - `insumo` lines: `insumoId`, `cantidad`, `unidad`, `mermaPct` (waste %).
+  - `insumo` lines: `insumoId`, `cantidad`, `unidad`. There is no waste percentage: lines saved with the old `mermaPct` lose it in the IndexedDB v8 migration and on backup import, and their cost is simply the quantity's cost.
   - `costoFijo` lines: `descripcion`, `monto`. They cover gas, packaging, labour.
 - **historialPrecios** (price history): `insumoId`, `fecha`, `unidadBase`, `costoPorUnidadBase` (fractional cents). A new entry is added, in the same transaction as the ingredient, only when its cost per base unit changes.
 
@@ -79,7 +79,7 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 
 ```
 costoPorUnidadBase = precioCompra / (cantidadCompra converted to the base unit)
-costoLinea         = cantidad (in base unit) * costoPorUnidadBase / (1 - mermaPct/100)
+costoLinea         = cantidad (in base unit) * costoPorUnidadBase
 costoTotal         = sum(costoLinea) + sum(fixed costs)
 costoPorUnidad     = costoTotal / rendimiento
 precioSugerido     = costoPorUnidad * (1 + margen/100)
@@ -166,7 +166,7 @@ ahorro       = por separado - precio            (negative = the promo costs more
 ### Backup
 - **Export** everything to one JSON file, `ona-YYYY-MM-DD.json`:
   `{ formato: 'mundana-backup', version, exportadoEn, datos: { <every data store> } }`.
-  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos. Version 5 added `proveedores` and `operacionesProveedor` (and `proveedorId` on products, `proveedorId` + `importe` on entries); older files import with no suppliers. Version 6 added `categorias` (and `categoriaId` on products); older files import with no categories.
+  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos. Version 5 added `proveedores` and `operacionesProveedor` (and `proveedorId` on products, `proveedorId` + `importe` on entries); older files import with no suppliers. Version 6 added `categorias` (and `categoriaId` on products); older files import with no categories. Version 7 dropped `mermaPct` from recipe lines; older files import with it removed (the waste is ignored).
 - **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale, promo components → product, a sale's promos → promo, products / entries / account entries → supplier, products → category); a movement with a `ventaId` must be a `venta` with a `precioUnitario`, and one with a `promoId` must also have price 0 and belong to a sale that includes that promo. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
 - The backup page ends with the running release (`package.json` `version`, set by `release.py`), to tell which version is deployed.
 - The date of the last backup is kept, and the app warns when there is data and no backup in more than **7 days**.

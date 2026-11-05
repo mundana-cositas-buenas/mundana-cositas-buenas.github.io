@@ -13,7 +13,6 @@ interface Rango {
   min?: number; // inclusive
   max?: number; // inclusive
   mayorQue?: number; // exclusive
-  menorQue?: number; // exclusive
 }
 
 export const NUMERO_INVALIDO = 'No es un número (ej.: 1,5 o 1.250)';
@@ -29,7 +28,6 @@ export function leerNumero(texto: string, r: Rango = {}): Resultado {
   if (r.min !== undefined && n < r.min) return { ok: false, error: `Mínimo ${formatNumero(r.min)}` };
   if (r.max !== undefined && n > r.max) return { ok: false, error: `Máximo ${formatNumero(r.max)}` };
   if (r.mayorQue !== undefined && n <= r.mayorQue) return { ok: false, error: `Debe ser mayor que ${formatNumero(r.mayorQue)}` };
-  if (r.menorQue !== undefined && n >= r.menorQue) return { ok: false, error: `Debe ser menor que ${formatNumero(r.menorQue)}` };
   return { ok: true, valor: n };
 }
 
