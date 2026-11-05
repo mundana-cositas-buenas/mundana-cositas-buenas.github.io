@@ -1,9 +1,9 @@
-FROM debian:forky-20261027-slim
+FROM debian:forky-20261104-slim
 
 LABEL maintainer="Jeremías Casteglione <jrmsdev@gmail.com>"
-LABEL version="261103"
+LABEL version="261105"
 
-ENV MUNDANA_UPGRADE=261103
+ENV MUNDANA_UPGRADE=261105
 
 USER root:root
 WORKDIR /root
@@ -56,7 +56,7 @@ ENV HOME=/home/${DEVEL_USER}
 RUN npm version
 RUN npx --version
 
-ENV MUNDANA_CLAUDE_UPGRADE=2.1.317
+ENV MUNDANA_CLAUDE_UPGRADE=2.1.318
 
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
