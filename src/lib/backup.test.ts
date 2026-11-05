@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Insumo, LineaCostoFijo, LineaInsumo, PrecioHistorico, Receta } from '../costos/types';
+import { cambiosEmpleados } from '../empleados/repo';
+import type { Empleado, Turno } from '../empleados/types';
 import { cambiosStock } from '../stock/repo';
 import type { Categoria, Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
 import {
@@ -86,6 +88,14 @@ const venta: Venta = {
   promos: [{ promoId: 'pr1', nombre: 'Miel x2', precio: 200000, cantidad: 1 }],
 };
 
+const empleado: Empleado = { id: 'e1', actualizadoEn: T, nombre: 'Ana', activo: true };
+const turnos: Turno[] = [
+  { id: 't1', actualizadoEn: T, empleadoId: 'e1', entrada: '2026-01-01T12:00:00.000Z', salida: '2026-01-01T20:00:00.000Z' },
+  { id: 't2', actualizadoEn: T, empleadoId: 'e1', entrada: '2026-01-02T12:00:00.000Z', salida: '2026-01-02T15:00:00.000Z', manual: true },
+  { id: 't3', actualizadoEn: T, empleadoId: 'e1', entrada: '2026-01-03T12:00:00.000Z', salida: '2026-01-03T15:00:00.000Z', salidaManual: true, anuladoEn: T },
+  { id: 't4', actualizadoEn: T, empleadoId: 'e1', entrada: '2026-01-04T12:00:00.000Z' },
+];
+
 const backup = (): Backup => ({
   formato: FORMATO,
   version: VERSION,
@@ -102,6 +112,8 @@ const backup = (): Backup => ({
     proveedores: [structuredClone(proveedor)],
     operacionesProveedor: structuredClone(operaciones),
     categorias: [structuredClone(categoria)],
+    empleados: [structuredClone(empleado)],
+    turnos: structuredClone(turnos),
   },
 });
 
@@ -128,7 +140,7 @@ describe('exportar / importar', () => {
     const antes = await exportar(db, new Date(T));
 
     const texto = serializar(antes);
-    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], promos: [], ventas: [], movimientos: [], proveedores: [], operacionesProveedor: [], categorias: [] } });
+    await importar(db, { ...backup(), datos: { insumos: [], historialPrecios: [], recetas: [], recetaLineas: [], productos: [], promos: [], ventas: [], movimientos: [], proveedores: [], operacionesProveedor: [], categorias: [], empleados: [], turnos: [] } });
     expect(Object.values(await contar(db)).every((c) => c === 0)).toBe(true);
 
     const r = leerBackup(texto);
@@ -160,6 +172,8 @@ describe('exportar / importar', () => {
       ventas: 1,
       movimientos: 6,
       operacionesProveedor: 3,
+      empleados: 1,
+      turnos: 4,
     });
     expect(await contar(db)).toEqual(contarBackup(b));
   });
@@ -186,19 +200,23 @@ describe('exportar / importar', () => {
     expect(await contar(db)).toEqual(contarBackup(backup()));
   });
 
-  it('import notifies the stock badge and the backup warning, and records the date', async () => {
+  it('import notifies the nav badges and the backup warning, and records the date', async () => {
     const db = await fresh();
     const stock = vi.fn();
+    const emp = vi.fn();
     const bk = vi.fn();
     cambiosStock.addEventListener('cambio', stock);
+    cambiosEmpleados.addEventListener('cambio', emp);
     cambiosBackup.addEventListener('cambio', bk);
     try {
       await importar(db, backup(), new Date(T));
     } finally {
       cambiosStock.removeEventListener('cambio', stock);
+      cambiosEmpleados.removeEventListener('cambio', emp);
       cambiosBackup.removeEventListener('cambio', bk);
     }
     expect(stock).toHaveBeenCalledOnce();
+    expect(emp).toHaveBeenCalledOnce();
     expect(bk).toHaveBeenCalledOnce();
     expect(await ultimoBackup(db)).toBe(T);
   });
@@ -379,6 +397,35 @@ describe('leerBackup', () => {
     );
     expect(r.ok && r.backup.version).toBe(VERSION);
     expect(r.ok && r.backup.datos.recetaLineas[0]).toEqual(lineaInsumo);
+  });
+
+  it('upgrades version 7 files, which had no employees', () => {
+    const r = leerBackup(
+      json((b) => {
+        b.version = 7;
+        delete b.datos.empleados;
+        delete b.datos.turnos;
+      }),
+    );
+    expect(r.ok && r.backup.version).toBe(VERSION);
+    expect(r.ok && r.backup.datos.empleados).toEqual([]);
+    expect(r.ok && r.backup.datos.turnos).toEqual([]);
+    // From version 8 on the lists are required.
+    expect(errores(json((b) => delete b.datos.empleados))).toContain('Empleados: falta la lista.');
+    expect(errores(json((b) => delete b.datos.turnos))).toContain('Turnos de empleados: falta la lista.');
+  });
+
+  it('checks employees and their shifts', () => {
+    const campo = (store: string, i: number, k: string) => `${store}, registro ${i}: "${k}" falta o es inválido.`;
+    const ts = 'Turnos de empleados';
+    expect(errores(json((b) => (b.datos.empleados[0].activo = 'sí')))).toEqual([campo('Empleados', 1, 'activo')]);
+    expect(errores(json((b) => (b.datos.turnos[0].entrada = 'ayer')))).toEqual([campo(ts, 1, 'entrada')]);
+    expect(errores(json((b) => (b.datos.turnos[0].salida = 5)))).toEqual([campo(ts, 1, 'salida')]);
+    expect(errores(json((b) => (b.datos.turnos[1].manual = false)))).toEqual([campo(ts, 2, 'manual')]);
+    expect(errores(json((b) => (b.datos.turnos[2].salidaManual = 'sí')))).toEqual([campo(ts, 3, 'salidaManual')]);
+    expect(errores(json((b) => (b.datos.empleados = [])))).toEqual(
+      [1, 2, 3, 4].map((i) => `${ts}, registro ${i}: "empleadoId" apunta a un registro que no está en el backup.`),
+    );
   });
 
   it('checks categories and the products that refer to them', () => {

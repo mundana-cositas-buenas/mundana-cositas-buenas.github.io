@@ -1,6 +1,8 @@
 <script lang="ts">
   import BackupView from './backup/BackupView.svelte';
   import CostosView from './costos/CostosView.svelte';
+  import EmpleadosSeccion from './empleados/EmpleadosSeccion.svelte';
+  import { cambiosEmpleados, cargarPendientes } from './empleados/repo';
   import { ATAJOS, atajoDe } from './lib/atajos';
   import { backupVencido, cambiosBackup, contar, diasDesde, ultimoBackup } from './lib/backup';
   import type { DB } from './lib/db';
@@ -88,6 +90,19 @@
     return () => cambiosStock.removeEventListener('cambio', actualizar);
   });
 
+  // Shifts left open from a previous day (forgotten clock-outs). Also refreshed on navigation: they
+  // become pending when the day changes.
+  let turnosPendientes = $state(0);
+  $effect(() => {
+    void hash;
+    const actualizar = async () => {
+      turnosPendientes = (await cargarPendientes(await db)).length;
+    };
+    actualizar().catch(() => {});
+    cambiosEmpleados.addEventListener('cambio', actualizar);
+    return () => cambiosEmpleados.removeEventListener('cambio', actualizar);
+  });
+
   // Stale-backup warning: rechecked on navigation (costos writes don't notify) and after a backup.
   let sinBackup = $state<{ dias: number | undefined } | undefined>();
   $effect(() => {
@@ -116,7 +131,7 @@
   <nav>
     {#each SECCIONES as s (s.id)}
       <a href="#/{s.id}" aria-current={seccion === s.id ? 'page' : undefined}>
-        {s.titulo}{#if s.id === 'stock' && alertas}&nbsp;<span class="badge" title="Productos con stock bajo">{alertas}</span>{/if}{#if s.id === 'proveedores' && pagos}&nbsp;<span class="badge" title="Proveedores con pagos vencidos o por vencer">{pagos}</span>{/if}
+        {s.titulo}{#if s.id === 'stock' && alertas}&nbsp;<span class="badge" title="Productos con stock bajo">{alertas}</span>{/if}{#if s.id === 'proveedores' && pagos}&nbsp;<span class="badge" title="Proveedores con pagos vencidos o por vencer">{pagos}</span>{/if}{#if s.id === 'empleados' && turnosPendientes}&nbsp;<span class="badge" title="Turnos de días anteriores sin salida">{turnosPendientes}</span>{/if}
       </a>
     {/each}
   </nav>
@@ -148,6 +163,8 @@
       <StockView {db} {ruta} {alertas} {ediciones} />
     {:else if seccion === 'proveedores'}
       <ProveedoresSeccion {db} {ruta} />
+    {:else if seccion === 'empleados'}
+      <EmpleadosSeccion {db} {ruta} {turnosPendientes} />
     {:else}
       <BackupView {db} />
     {/if}

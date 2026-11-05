@@ -4,6 +4,7 @@ export const SECCIONES = [
   { id: 'costos', titulo: 'Recetas' },
   { id: 'stock', titulo: 'Stock' },
   { id: 'proveedores', titulo: 'Proveedores' },
+  { id: 'empleados', titulo: 'Empleados' },
   { id: 'backup', titulo: 'Backup' },
 ] as const;
 

@@ -6,6 +6,7 @@ describe('seccionDesdeHash', () => {
     expect(seccionDesdeHash('#/stock')).toBe('stock');
     expect(seccionDesdeHash('#backup')).toBe('backup');
     expect(seccionDesdeHash('#/costos/receta/123')).toBe('costos');
+    expect(seccionDesdeHash('#/empleados/horas')).toBe('empleados');
   });
 
   it('defaults to ventas, the home page', () => {

@@ -20,6 +20,8 @@ export type StoreName =
   | 'proveedores'
   | 'operacionesProveedor'
   | 'categorias'
+  | 'empleados'
+  | 'turnos'
   | 'meta';
 
 export const DB_NAME = 'mundana';
@@ -83,6 +85,11 @@ export const MIGRATIONS: readonly Migration[] = [
       }
       c.continue();
     };
+  },
+  // Employees and their work shifts.
+  (db) => {
+    db.createObjectStore('empleados', { keyPath: 'id' });
+    db.createObjectStore('turnos', { keyPath: 'id' }).createIndex('empleadoId', 'empleadoId');
   },
 ];
 

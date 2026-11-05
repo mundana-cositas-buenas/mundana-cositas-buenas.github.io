@@ -27,6 +27,7 @@ describe('openDB', () => {
     expect([...db.idb.objectStoreNames].sort()).toEqual(
       [
         'categorias',
+        'empleados',
         'historialPrecios',
         'insumos',
         'meta',
@@ -37,6 +38,7 @@ describe('openDB', () => {
         'proveedores',
         'recetaLineas',
         'recetas',
+        'turnos',
         'ventas',
       ].sort(),
     );
@@ -48,6 +50,21 @@ describe('openDB', () => {
     expect([...ops.indexNames]).toEqual(['proveedorId']);
     const productos = db.idb.transaction('productos').objectStore('productos');
     expect([...productos.indexNames]).toEqual(['categoriaId']);
+    const turnos = db.idb.transaction('turnos').objectStore('turnos');
+    expect([...turnos.indexNames]).toEqual(['empleadoId']);
+  });
+
+  it('v9 adds employees and shifts and keeps the existing data', async () => {
+    const name = `v9-${n++}`;
+    const viejo = await openDB(name, MIGRATIONS.slice(0, 8));
+    await viejo.put('productos', { id: 'p1', actualizadoEn: '', nombre: 'Miel', unidad: 'u', stockMinimo: 0, activo: true });
+    viejo.close();
+    const db = await openDB(name);
+    expect(db.version).toBe(DB_VERSION);
+    expect(await db.list('empleados')).toEqual([]);
+    expect(await db.listBy('turnos', 'empleadoId', 'e1')).toEqual([]);
+    expect((await db.list('productos')).map((p) => p.id)).toEqual(['p1']);
+    db.close();
   });
 
   it('v8 drops mermaPct from recipe lines and keeps the rest', async () => {

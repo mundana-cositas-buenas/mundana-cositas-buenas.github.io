@@ -1,9 +1,11 @@
 # Mundana: design
 
-A web app for a food shop, with two independent modules:
+A web app for a food shop, with two independent modules, plus employee hours:
 
 1. **Recipe costing** (costos): what it costs to make a product, to decide what to sell it for.
 2. **Stock**: record stock, register sales (one or more products, with a % discount) that take it down, and warn when it runs low. Sales by day are the app's home page. Each product has a supplier, with an account of what is owed to it and warnings when a payment is due.
+
+3. **Employees** (empleados): staff clock in and out (or type a shift by hand) on the shop's PC, and the app adds up their hours. Hours only: no pay rates or payroll.
 
 The UI is in Spanish (Argentina); code identifiers follow the domain terms (`insumo`, `receta`, `producto`, `movimiento`…).
 
@@ -53,6 +55,11 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **proveedores** (suppliers): `nombre` (unique), `plazoDias` (payment term in whole days, 15 by default), `activo`, and optional text `telefono`, `rut`, `cuenta` (bank account number), `nota`.
 - **operacionesProveedor** (manual entries in a supplier's account): `proveedorId`, `tipo` (`compra` | `pago` | `ajuste`), `importe` (cents: positive for compra and pago, signed and non-zero for ajuste), `fecha`, `medioPago` (only, and always, on a pago: `efectivo` | `transferencia` | `debito` | `credito` | `cheque` | `otro`, a fixed list), `nota?`, `anuladoEn?`. Never edited: voided, then deletable, like movements.
 
+### Employees
+- **empleados**: `nombre` (unique among employees), `activo` (inactive ones aren't offered for clocking in, but keep their shifts and still show in the hours with any). No other personal data.
+- **turnos** (work shifts): `empleadoId`, `entrada`, `salida?` (missing while the shift is open), `manual?: true` (a whole shift typed by hand), `salidaManual?: true` (an open shift whose exit was typed by hand), `anuladoEn?`. Times are ISO dates, to the minute (clocking drops the seconds).
+  - A shift is never edited: the only change allowed is setting the exit of an open one. A wrong shift is voided ("anular": stays in the history, stops counting) and typed again; only a voided shift can be deleted.
+
 ### Other
 - **meta**: app bookkeeping, e.g. the date of the last backup. Not included in backups.
 
@@ -73,6 +80,7 @@ IndexedDB object stores. Every record has `id` (UUID) and `actualizadoEn` (ISO d
 - **A supplier can't be deleted** while a product or an account line (even a voided one) refers to it; it can be deactivated. An inactive supplier isn't offered for products, but its account and payment warnings remain.
 - **An entry adds to the account only for a product with a supplier**, and only when the user leaves "Suma a la cuenta" checked (returns, gifts and purchases already entered by hand are unchecked).
 - **A category can't be deleted while it has products** (active or not): move them to another category first. Categories have no active flag. Grouping by category always uses each product's current category, past sales included (sales keep no category).
+- **Employees and shifts**: there is no identification (anyone at the PC picks a name), so every shift keeps how it was entered. For each employee, non-voided shifts can't overlap (an open shift runs until it's closed, so there is at most one open shift and nothing can be typed after its entry), no time can be in the future, and the exit is after the entry (at least one minute). Inactive employees can't clock in, but shifts can be typed or closed for them. An employee with any shift (even a voided one) can't be deleted; they can be deactivated.
 - **Stock alert**: an active product with stock ≤ its minimum is "low" (bajo); with stock ≤ 0 it is "out of stock" (sin stock).
 
 ## Formulas (costing)
@@ -111,6 +119,19 @@ pendientes   = payments and negative adjustments pay the oldest debt first (date
 vencido      = pending with vencimiento before today
 vence pronto = pending due today or within the next 3 days
 aviso        = a supplier (active or not) with something vencido or due soon; the nav badge counts these suppliers
+```
+
+## Formulas (employees)
+
+```
+duración     = salida - entrada, in whole minutes, shown as h:mm (open shifts: up to now)
+día          = the local day of the entry (a shift crossing midnight belongs to the day it started)
+horas        = sum(duración) per employee over the closed, non-voided shifts whose día is in the range (desde/hasta, both included)
+semana       = Monday to Sunday
+largo        = a shift (an open one up to now) longer than 14 h: shown with a warning, never blocked
+pendiente    = an open shift that started on an earlier day and is largo (a forgotten clock-out); the nav badge counts them
+turno a mano = día + entrada + salida; a salida earlier than the entrada is the next day
+cierre       = the exit of an open shift is the first time with the typed hour after its entry (same day, or the next)
 ```
 
 ## Formulas (sales)
@@ -163,14 +184,21 @@ ahorro       = por separado - precio            (negative = the promo costs more
 - Entry form: for a product with a supplier, a "Suma a la cuenta de <supplier>" checkbox (checked by default) and the amount, proposed as cost × quantity until typed over (required while checked). The movement history shows the amount next to such entries, linking to the supplier.
 - Per-product movement history, with cancelling.
 
+### Employees
+- A top-level section (`#/empleados`), after Proveedores, with its own badge: the number of pending shifts (refreshed after every employee write, and on navigation since shifts become pending with the clock).
+- Fichar (`#/empleados`): the active employees with their state ("Trabajando desde 09:30 (2:15)", highlighted when longer than 14 h) and one button, Entrar or Salir (Salir on a long shift asks first, suggesting to type the real exit instead); the pending shifts listed above, linking to each employee; a quick form to add an employee by name; today's shifts (plus any still open).
+- Each employee opens in their page (`#/empleados/<id>`): name and active ("Guardar datos"), "Borrar empleado" (blocked, with a message, while they have shifts); the open shift, if any, with a form to type its exit; a form to type a whole shift (day, entry, exit); and their shifts by month (‹ › to move), with the month's total, how each was entered, and "Anular" / "Borrar".
+- Horas (`#/empleados/horas`): hours and number of shifts per employee in a range (this week by default; this month; ‹ › to move; or any desde/hasta), with a total; active employees always show, inactive ones only with hours. Open shifts in the range are counted in a notice, not in the hours.
+- Day and time fields are native date and time inputs.
+
 ### Backup
 - **Export** everything to one JSON file, `ona-YYYY-MM-DD.json`:
   `{ formato: 'mundana-backup', version, exportadoEn, datos: { <every data store> } }`.
-  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos. Version 5 added `proveedores` and `operacionesProveedor` (and `proveedorId` on products, `proveedorId` + `importe` on entries); older files import with no suppliers. Version 6 added `categorias` (and `categoriaId` on products); older files import with no categories. Version 7 dropped `mermaPct` from recipe lines; older files import with it removed (the waste is ignored).
-- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale, promo components → product, a sale's promos → promo, products / entries / account entries → supplier, products → category); a movement with a `ventaId` must be a `venta` with a `precioUnitario`, and one with a `promoId` must also have price 0 and belong to a sale that includes that promo. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
+  `version` is the backup format version (not the IndexedDB schema version). Bump it when the shape of the records changes, and teach the reader to upgrade older files. Version 2 added `historialPrecios`; version 1 files still import, with an empty history. Version 3 added `ventas` (and `ventaId`/`precioUnitario` on sale movements); older files import with no sales. Version 4 added `promos` (and `promos` on sales, `promoId` on their movements); older files import with no promos. Version 5 added `proveedores` and `operacionesProveedor` (and `proveedorId` on products, `proveedorId` + `importe` on entries); older files import with no suppliers. Version 6 added `categorias` (and `categoriaId` on products); older files import with no categories. Version 7 dropped `mermaPct` from recipe lines; older files import with it removed (the waste is ignored). Version 8 added `empleados` and `turnos`; older files import with no employees.
+- **Import** validates format, version, every record's fields, unique ids and references (lines → recipe/ingredient, history → ingredient, movements → product and sale, promo components → product, a sale's promos → promo, products / entries / account entries → supplier, products → category, shifts → employee); a movement with a `ventaId` must be a `venta` with a `precioUnitario`, and one with a `promoId` must also have price 0 and belong to a sale that includes that promo. It shows a preview (record counts), asks for confirmation, downloads an automatic backup of the current data first, and then replaces everything in a single transaction.
 - The backup page ends with the running release (`package.json` `version`, set by `release.py`), to tell which version is deployed.
 - The date of the last backup is kept, and the app warns when there is data and no backup in more than **7 days**.
-- **CSV** exports of products (with supplier, cost, profit, margin and stock value), suppliers (with balance, overdue and due soon), every supplier's account (with running balance), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
+- **CSV** exports of products (with supplier, cost, profit, margin and stock value), suppliers (with balance, overdue and due soon), every supplier's account (with running balance), employee shifts (entry, exit, duration as h:mm and as decimal hours, how it was entered, voided), ingredients and recipes, for Excel in Spanish: `;` separator, comma decimals, BOM.
 - The app asks for persistent storage (`navigator.storage.persist()`) at startup and again when installed, and says so if the browser doesn't grant it.
 
 ### Offline and updates (PWA)
@@ -182,7 +210,7 @@ ahorro       = por separado - precio            (negative = the promo costs more
 - No service worker in development (`npm run dev`).
 
 ### Keyboard and usability
-- Single-key shortcuts, active only outside text fields and without Ctrl/Alt/Cmd: `v` Sales (home), `r` Recipes, `i` Ingredients, `p` Products, `m` Movements, `a` Alerts, `o` Promos, `e` Suppliers, `b` Backup, `n` the page's "new" field, `/` search, `?` help (Esc closes it).
+- Single-key shortcuts, active only outside text fields and without Ctrl/Alt/Cmd: `v` Sales (home), `r` Recipes, `i` Ingredients, `p` Products, `m` Movements, `a` Alerts, `o` Promos, `e` Suppliers, `f` Employees (clock in/out), `b` Backup, `n` the page's "new" field, `/` search, `?` help (Esc closes it).
 - Enter saves a row or movement (in a sale: adds the product, or registers the sale from the discount or note), Esc cancels a row edit. After saving or cancelling, focus returns to the row; when a save fails, it goes to the first invalid field.
 - Error messages name the field ("Precio de compra: No puede ser negativo") and update while typing after the first save attempt.
 - Numbers are typed as text and parsed Argentine style (`1.234,56`; a lone `.` followed by 3 digits is a thousands separator).
@@ -193,7 +221,7 @@ Development happens in a Docker container with **no browser, and none can be ins
 
 **Design principle**: all logic lives in plain TypeScript modules outside the Svelte components. Components only display data and call into that logic.
 
-- **Pure logic** (units, money, costing, stock, sales, supplier accounts and due dates, validation, shortcuts, service worker strategies): unit tests with Vitest. This is most of the coverage.
+- **Pure logic** (units, money, costing, stock, sales, supplier accounts and due dates, shift durations, overlaps and hours, validation, shortcuts, service worker strategies): unit tests with Vitest. This is most of the coverage.
 - **IndexedDB**: `fake-indexeddb` covers the wrapper, schema migrations, transactions and the repositories.
 - **Backup**: a round-trip test (export, wipe, import, compare), plus validation tests with malformed JSON, unknown versions, missing fields and dangling references.
 - **Svelte components**: not tested directly; keep moving logic out of them instead.
@@ -208,6 +236,7 @@ Anything that needs a real browser is reported as **untested in browser**, with 
 - Look, usability and keyboard focus.
 - Downloading a backup and picking a file to import.
 - The update notice for a new version.
+- Clocking in and out and typing shifts with the native date/time inputs.
 
 ## Risks
 

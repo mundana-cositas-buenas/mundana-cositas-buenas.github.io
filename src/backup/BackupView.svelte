@@ -1,5 +1,7 @@
 <script lang="ts">
   import { csvInsumos, csvRecetas } from '../costos/csv';
+  import { csvTurnos } from '../empleados/csv';
+  import { listarEmpleados, listarTurnos } from '../empleados/repo';
   import { lineasPorReceta, listarInsumos, listarRecetas } from '../costos/repo';
   import {
     backupVencido,
@@ -119,6 +121,10 @@
     const [proveedores, porProveedor, productos] = await Promise.all([listarProveedores(db), cuentas(db), listarProductos(db)]);
     return csvCuentasProveedores(proveedores, porProveedor, productos);
   };
+  const csvDeTurnos = async () => {
+    const [turnos, empleados] = await Promise.all([listarTurnos(db), listarEmpleados(db)]);
+    return csvTurnos(turnos, empleados);
+  };
   const csvDeInsumos = async () => csvInsumos(await listarInsumos(db));
   const csvDeRecetas = async () => {
     const [recetas, lineas, insumos] = await Promise.all([listarRecetas(db), lineasPorReceta(db), listarInsumos(db)]);
@@ -212,6 +218,7 @@
   <button type="button" class="secundario" onclick={() => exportarCsv('cuentas-proveedores', csvDeCuentas)} disabled={ocupado}>
     Cuentas de proveedores
   </button>
+  <button type="button" class="secundario" onclick={() => exportarCsv('turnos', csvDeTurnos)} disabled={ocupado}>Turnos de empleados</button>
   <button type="button" class="secundario" onclick={() => exportarCsv('insumos', csvDeInsumos)} disabled={ocupado}>Insumos</button>
   <button type="button" class="secundario" onclick={() => exportarCsv('recetas', csvDeRecetas)} disabled={ocupado}>Recetas</button>
 </div>

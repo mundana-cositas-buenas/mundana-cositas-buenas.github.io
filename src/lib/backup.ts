@@ -1,6 +1,8 @@
 // Full JSON backup: export every data store, validate a file, and replace everything with it.
 
 import type { Insumo, PrecioHistorico, Receta, RecetaLinea } from '../costos/types';
+import { cambiosEmpleados } from '../empleados/repo';
+import type { Empleado, Turno } from '../empleados/types';
 import { cambiosStock } from '../stock/repo';
 import { MEDIOS_PAGO } from '../stock/proveedores';
 import type { Categoria, Movimiento, OperacionProveedor, Producto, Promo, Proveedor, Venta } from '../stock/types';
@@ -16,7 +18,8 @@ export const FORMATO = 'mundana-backup';
 //    entries (older files are read with no suppliers).
 // 6: adds categorias and categoriaId on products (older files are read with no categories).
 // 7: recipe lines drop mermaPct (older files are read without it, so their waste is ignored).
-export const VERSION = 7;
+// 8: adds empleados and turnos (older files are read with no employees).
+export const VERSION = 8;
 
 /** Data stores, in dependency order. `meta` (e.g. the last backup date) is not exported. */
 export const STORES = [
@@ -31,6 +34,8 @@ export const STORES = [
   'ventas',
   'movimientos',
   'operacionesProveedor',
+  'empleados',
+  'turnos',
 ] as const;
 export type StoreDatos = (typeof STORES)[number];
 
@@ -46,6 +51,8 @@ export const NOMBRES: Record<StoreDatos, string> = {
   ventas: 'Ventas',
   movimientos: 'Movimientos de stock',
   operacionesProveedor: 'Operaciones con proveedores',
+  empleados: 'Empleados',
+  turnos: 'Turnos de empleados',
 };
 
 export interface Datos {
@@ -60,6 +67,8 @@ export interface Datos {
   ventas: Venta[];
   movimientos: Movimiento[];
   operacionesProveedor: OperacionProveedor[];
+  empleados: Empleado[];
+  turnos: Turno[];
 }
 
 export interface Backup {
@@ -129,6 +138,7 @@ export async function importar(db: DB, b: Backup, ahora = new Date()): Promise<v
     await req(tx.objectStore('meta').put(metaUltimo(ahora)));
   });
   cambiosStock.dispatchEvent(new Event('cambio'));
+  cambiosEmpleados.dispatchEvent(new Event('cambio'));
   avisar();
 }
 
@@ -272,6 +282,18 @@ function esquemaDe(store: StoreDatos, r: Record<string, unknown>): Esquema | str
         anuladoEn: opcional(fecha),
         promos: opcional(listaDe(PROMO_VENDIDA, { unico: 'promoId' })),
       };
+    case 'empleados':
+      return { ...REGISTRO, nombre: texto, activo: booleano };
+    case 'turnos':
+      return {
+        ...REGISTRO,
+        empleadoId: noVacio,
+        entrada: fecha,
+        salida: opcional(fecha),
+        manual: opcional(unoDe(true)),
+        salidaManual: opcional(unoDe(true)),
+        anuladoEn: opcional(fecha),
+      };
     case 'movimientos': {
       // A sale line (with ventaId) must be a 'venta' and carry its unit price;
       // a promo component (with promoId) must be a sale line with price 0;
@@ -331,6 +353,8 @@ export function leerBackup(contenido: string): Lectura {
   if ((v as number) < 5 && datos.proveedores === undefined) datos.proveedores = [];
   if ((v as number) < 5 && datos.operacionesProveedor === undefined) datos.operacionesProveedor = [];
   if ((v as number) < 6 && datos.categorias === undefined) datos.categorias = [];
+  if ((v as number) < 8 && datos.empleados === undefined) datos.empleados = [];
+  if ((v as number) < 8 && datos.turnos === undefined) datos.turnos = [];
   // Recipe lines no longer have a waste percentage: drop it so it doesn't get back into the database.
   if (Array.isArray(datos.recetaLineas)) for (const l of datos.recetaLineas) if (esObjeto(l)) delete l.mermaPct;
 
@@ -376,6 +400,7 @@ export function leerBackup(contenido: string): Lectura {
   ref('productos', 'categoriaId', 'categorias');
   ref('movimientos', 'proveedorId', 'proveedores');
   ref('operacionesProveedor', 'proveedorId', 'proveedores');
+  ref('turnos', 'empleadoId', 'empleados');
   // Inside lists: a promo's components → products; a sale's promos → promos.
   const refEnLista = (s: StoreDatos, lista: string, campo: string, destino: StoreDatos) => {
     const registros = datos[s];
